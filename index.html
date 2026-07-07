@@ -2,165 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spirit Box // Stable Static</title>
+    <title>Aggressive Spirit Box Scan</title>
     <style>
-        body { background: #121212; color: #00ff66; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 15px; box-sizing: border-box; }
-        .container { border: 2px solid #00ff66; padding: 20px; width: 100%; max-width: 400px; background: #1a1a1a; box-shadow: 0 0 10px rgba(0, 255, 102, 0.2); }
-        .control { margin: 15px 0; }
-        button { background: #00ff66; border: none; padding: 15px; font-weight: bold; width: 100%; font-size: 1.2rem; cursor: pointer; }
-        button:active { background: #00cc52; }
-        label { display: block; font-size: 0.8rem; margin-bottom: 5px; }
-        input { width: 100%; accent-color: #00ff66; }
-        canvas { width: 100%; height: 80px; background: #000; border: 1px solid #00ff66; margin-top: 10px; display: block; }
-        #log { font-size: 0.7rem; color: #666; text-align: center; margin-top: 10px; }
+        body { background: #000; color: #ff0000; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        button { background: #ff0000; color: #000; border: none; padding: 20px 40px; font-weight: bold; font-size: 1.5rem; cursor: pointer; }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <h1>Spirit Box v2.1</h1>
-    <button id="start-btn">START SWEEP</button>
-
-    <canvas id="scope"></canvas>
-
-    <div class="control">
-        <label>Static Volume: <span id="static-val">20</span>%</label>
-        <input type="range" id="static-vol" min="0" max="100" value="20">
-    </div>
-
-    <div class="control">
-        <label>Sweep Rate: <span id="rate-val">200</span>ms</label>
-        <input type="range" id="sweep-rate" min="1" max="5000" value="200">
-    </div>
-
-    <div class="control">
-        <label>Bass Cut (HPF): <span id="bass-val">150</span>Hz</label>
-        <input type="range" id="bass" min="20" max="1000" value="150">
-    </div>
-
-    <div class="control">
-        <label>Tone (LPF): <span id="tone-val">8000</span>Hz</label>
-        <input type="range" id="tone" min="1000" max="20000" value="8000">
-    </div>
-
-    <div id="log">Status: Ready.</div>
-</div>
+    <button id="scan-btn">SCAN</button>
+    <div id="status" style="margin-top: 20px;">READY</div>
 
 <script>
-    let audioContext, audio, source, hp, lp, analyser;
-    let staticNode, staticGain;
-    let isSweeping = false;
+    let audio = new Audio();
+    let isScanning = false;
     let stations = [];
-    const canvas = document.getElementById('scope');
-    const ctx = canvas.getContext('2d');
 
-    function initAudio() {
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
-            // Filters
-            hp = audioContext.createBiquadFilter();
-            hp.type = "highpass";
-            hp.frequency.value = 150;
-            
-            lp = audioContext.createBiquadFilter();
-            lp.type = "lowpass";
-            lp.frequency.value = 8000;
-            
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 128;
-
-            // Setup Radio Source
-            audio = new Audio();
-            audio.crossOrigin = "anonymous";
-            source = audioContext.createMediaElementSource(audio);
-
-            // Setup White Noise Source
-            const bufferSize = audioContext.sampleRate * 2;
-            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-            
-            staticNode = audioContext.createBufferSource();
-            staticNode.buffer = buffer;
-            staticNode.loop = true;
-            staticGain = audioContext.createGain();
-            staticGain.gain.value = 0.2;
-
-            // Chain: (Radio + Static) -> Filters -> Analyser -> Output
-            source.connect(hp);
-            staticNode.connect(staticGain).connect(hp);
-            hp.connect(lp);
-            lp.connect(analyser);
-            analyser.connect(audioContext.destination);
-
-            staticNode.start();
-        }
-        audioContext.resume();
-    }
-
-    // Controls
-    document.getElementById('static-vol').oninput = (e) => {
-        document.getElementById('static-val').textContent = e.target.value;
-        if(staticGain) staticGain.gain.value = e.target.value / 100;
-    };
-    document.getElementById('sweep-rate').oninput = (e) => document.getElementById('rate-val').textContent = e.target.value;
-    document.getElementById('bass').oninput = (e) => {
-        document.getElementById('bass-val').textContent = e.target.value;
-        if(hp) hp.frequency.value = e.target.value;
-    };
-    document.getElementById('tone').oninput = (e) => {
-        document.getElementById('tone-val').textContent = e.target.value;
-        if(lp) lp.frequency.value = e.target.value;
-    };
-
-    async function sweep() {
-        if (!isSweeping) return;
+    // Aggressive Clipping Logic
+    async function aggressiveScan() {
+        if (!isScanning) return;
+        
+        // Randomly pick a station and slice of audio
         const station = stations[Math.floor(Math.random() * stations.length)];
         audio.src = station.url_resolved;
         audio.play().catch(() => {});
-        setTimeout(sweep, document.getElementById('sweep-rate').value);
+        
+        // INTERRUPT: Cut the audio after 100ms to force the "Spirit Box" stutter
+        setTimeout(() => {
+            audio.pause();
+            audio.currentTime = 0; 
+        }, 100);
+
+        // Next slice
+        setTimeout(aggressiveScan, 150); 
     }
 
-    document.getElementById('start-btn').addEventListener('click', async () => {
-        initAudio();
-        if (!isSweeping) {
-            isSweeping = true;
-            document.getElementById('start-btn').textContent = "STOP SWEEP";
+    document.getElementById('scan-btn').addEventListener('click', async () => {
+        if (!isScanning) {
+            isScanning = true;
+            document.getElementById('scan-btn').textContent = "STOP";
             if (stations.length === 0) {
-                document.getElementById('log').textContent = "Syncing...";
                 const res = await fetch("https://de1.api.radio-browser.info/json/stations/search?limit=50&hidebroken=true&codec=mp3");
                 stations = await res.json();
             }
-            sweep();
+            aggressiveScan();
         } else {
-            isSweeping = false;
-            document.getElementById('start-btn').textContent = "START SWEEP";
+            isScanning = false;
+            document.getElementById('scan-btn').textContent = "SCAN";
             audio.pause();
         }
     });
-
-    function draw() {
-        requestAnimationFrame(draw);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0,0,canvas.width, canvas.height);
-        if (analyser) {
-            const data = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteTimeDomainData(data);
-            ctx.strokeStyle = '#00ff66';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            for(let i=0; i<data.length; i++) {
-                let x = i * (canvas.width/data.length);
-                let y = (data[i]/255) * canvas.height;
-                if(i===0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            }
-            ctx.stroke();
-        }
-    }
-    draw();
 </script>
 </body>
 </html>
