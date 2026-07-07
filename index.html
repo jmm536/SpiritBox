@@ -3,67 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spirit Box v1.0</title>
+    <title>Spirit Box Controls</title>
     <style>
-        body { background: #121212; color: #00ff66; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .container { border: 2px solid #00ff66; padding: 20px; text-align: center; width: 80%; }
-        button { background: #00ff66; border: none; padding: 20px; font-size: 1.5rem; font-weight: bold; cursor: pointer; width: 100%; }
-        #log { margin-top: 20px; font-size: 0.8rem; color: #888; }
+        body { background: #121212; color: #00ff66; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 15px; }
+        .container { border: 2px solid #00ff66; padding: 20px; width: 100%; max-width: 400px; background: #1a1a1a; }
+        .control { margin: 15px 0; }
+        button { background: #00ff66; border: none; padding: 15px; font-weight: bold; width: 100%; font-size: 1.2rem; cursor: pointer; }
+        label { display: block; font-size: 0.8rem; margin-bottom: 5px; }
+        input { width: 100%; accent-color: #00ff66; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Spirit Box v1.0</h1>
+    <h1>Spirit Box</h1>
     <button id="start-btn">START SWEEP</button>
-    <div id="log">Ready to connect.</div>
+
+    <div class="control">
+        <label>Sweep Rate: <span id="rate-val">200</span>ms</label>
+        <input type="range" id="sweep-rate" min="1" max="5000" value="200">
+    </div>
+
+    <div class="control">
+        <label>Bass (High Pass): <span id="bass-val">150</span>Hz</label>
+        <input type="range" id="bass" min="20" max="1000" value="150">
+    </div>
+
+    <div class="control">
+        <label>Tone (Low Pass): <span id="tone-val">8000</span>Hz</label>
+        <input type="range" id="tone" min="1000" max="20000" value="8000">
+    </div>
+
+    <div class="control">
+        <label>Pitch/Speed: <span id="pitch-val">1.0</span>x</label>
+        <input type="range" id="pitch" min="0.5" max="2.0" step="0.1" value="1.0">
+    </div>
+
+    <div id="log" style="font-size: 0.7rem; color: #666; text-align: center;">Ready.</div>
 </div>
 
 <script>
-    let audio = new Audio();
+    let audioContext, audio, source, hp, lp;
     let isSweeping = false;
     let stations = [];
 
-    async function fetchStations() {
-        document.getElementById('log').textContent = "Fetching stations...";
-        try {
-            const res = await fetch("https://de1.api.radio-browser.info/json/stations/search?limit=50&hidebroken=true&codec=mp3");
-            stations = await res.json();
-            document.getElementById('log').textContent = `Loaded ${stations.length} stations.`;
-        } catch (e) {
-            document.getElementById('log').textContent = "Error loading stations.";
+    // Initialize Audio Graph
+    function initAudio() {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            audio = new Audio();
+            audio.crossOrigin = "anonymous";
+            
+            source = audioContext.createMediaElementSource(audio);
+            hp = audioContext.createBiquadFilter();
+            hp.type = "highpass";
+            lp = audioContext.createBiquadFilter();
+            lp.type = "lowpass";
+
+            source.connect(hp).connect(lp).connect(audioContext.destination);
         }
+        audioContext.resume();
     }
+
+    // UI Listeners
+    document.getElementById('sweep-rate').oninput = (e) => document.getElementById('rate-val').textContent = e.target.value;
+    document.getElementById('bass').oninput = (e) => {
+        document.getElementById('bass-val').textContent = e.target.value;
+        if(hp) hp.frequency.value = e.target.value;
+    };
+    document.getElementById('tone').oninput = (e) => {
+        document.getElementById('tone-val').textContent = e.target.value;
+        if(lp) lp.frequency.value = e.target.value;
+    };
+    document.getElementById('pitch').oninput = (e) => {
+        document.getElementById('pitch-val').textContent = e.target.value;
+        if(audio) audio.playbackRate = e.target.value;
+    };
 
     async function sweep() {
         if (!isSweeping) return;
-        
-        // Pick a random station
         const station = stations[Math.floor(Math.random() * stations.length)];
         audio.src = station.url_resolved;
+        audio.play().catch(() => {});
         
-        // Mobile browsers require this to play
-        try {
-            await audio.play();
-            document.getElementById('log').textContent = `Playing: ${station.name}`;
-        } catch (e) {
-            document.getElementById('log').textContent = "Waiting for interaction...";
-        }
-
-        setTimeout(sweep, 2000); // Sweep every 2 seconds
+        let rate = document.getElementById('sweep-rate').value;
+        setTimeout(sweep, rate);
     }
 
     document.getElementById('start-btn').addEventListener('click', async () => {
+        initAudio();
         if (!isSweeping) {
             isSweeping = true;
             document.getElementById('start-btn').textContent = "STOP";
-            await fetchStations();
+            const res = await fetch("https://de1.api.radio-browser.info/json/stations/search?limit=50&hidebroken=true&codec=mp3");
+            stations = await res.json();
             sweep();
         } else {
             isSweeping = false;
             document.getElementById('start-btn').textContent = "START SWEEP";
             audio.pause();
-            document.getElementById('log').textContent = "Stopped.";
         }
     });
 </script>
