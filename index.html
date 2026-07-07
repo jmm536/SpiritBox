@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Decoder Edition)</title>
+    <title>Internet Radio Spirit Box (Master DSP Edition)</title>
     <style>
         body {
             background-color: #121212;
@@ -54,7 +54,7 @@
             border: 1px solid #00ff66;
             border-radius: 4px;
             width: 100%;
-            height: 90px;
+            height: 120px;
             margin-bottom: 10px;
             box-sizing: border-box;
             overflow: hidden;
@@ -64,7 +64,6 @@
             height: 100%;
             display: block;
         }
-        /* New Decoder Terminal Styles */
         .terminal-container {
             background-color: #050505;
             border: 1px solid #00ff66;
@@ -75,16 +74,13 @@
             overflow-y: auto;
             box-sizing: border-box;
             display: flex;
-            flex-direction: column-reverse; /* Keeps freshest words scrolling at bottom */
+            flex-direction: column-reverse; 
         }
         .terminal-line {
             font-size: 0.85rem;
             line-height: 1.3;
             color: #00ff66;
             text-shadow: 0 0 4px rgba(0, 255, 102, 0.3);
-        }
-        .terminal-line.interim {
-            color: #00aa44;
         }
         .controls {
             display: flex;
@@ -150,7 +146,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v3.7 // DECODER</h1>
+    <h1>IP-SPIRIT BOX v3.8 // GLOBAL DSP</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -188,14 +184,14 @@
 
         <div class="control-group">
             <div class="control-row">
-                <label for="bass-cut">Static Bass Cut (High-Pass): <strong><span id="bass-val">150</span> Hz</strong></label>
+                <label for="bass-cut">Master Bass Cut (High-Pass): <strong><span id="bass-val">150</span> Hz</strong></label>
             </div>
             <input type="range" id="bass-cut" min="20" max="1200" step="10" value="150">
         </div>
 
         <div class="control-group">
             <div class="control-row">
-                <label for="treble-cut">Static Treble Cut (Low-Pass): <strong><span id="treble-val">8.0</span> kHz</strong></label>
+                <label for="treble-cut">Master Treble Cut (Low-Pass): <strong><span id="treble-val">8.0</span> kHz</strong></label>
             </div>
             <input type="range" id="treble-cut" min="1000" max="20000" step="250" value="8000">
         </div>
@@ -231,7 +227,6 @@
     let activeAudio = null;
     let isChannelAudioVoicing = false;
 
-    // Speech Decoder Variables
     let speechRecognitionEngine = null;
     let isDecoderEnabled = false;
 
@@ -305,6 +300,7 @@
         analyserNode.fftSize = 256; 
         audioDataArray = new Uint8Array(analyserNode.frequencyBinCount);
 
+        // Core Matrix Setup: Master Source Feeds -> Bass Cut -> Treble Cut -> Visualizer Analyzer -> Speakers
         hpFilter.connect(lpFilter);
         lpFilter.connect(analyserNode);
         analyserNode.connect(audioContext.destination);
@@ -330,7 +326,6 @@
         renderScopeLoop();
     }
 
-    // Initialize Web Speech Engine
     function initSpeechEngine() {
         const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechClass) {
@@ -341,18 +336,14 @@
         speechRecognitionEngine = new SpeechClass();
         speechRecognitionEngine.continuous = true;
         speechRecognitionEngine.interimResults = true;
-        // Forces English alignment matching target configuration parameters
         speechRecognitionEngine.lang = 'en-US'; 
 
         speechRecognitionEngine.onresult = (event) => {
             let interimTranscript = '';
-            
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const phrase = event.results[i][0].transcript.trim().toUpperCase();
                 if (event.results[i].isFinal) {
-                    if(phrase.length > 0) {
-                        logToTerminal(`> ${phrase}`);
-                    }
+                    if(phrase.length > 0) logToTerminal(`> ${phrase}`);
                 } else {
                     interimTranscript += ' ' + phrase;
                 }
@@ -361,32 +352,23 @@
         };
 
         speechRecognitionEngine.onerror = (event) => {
-            console.error("Speech Engine Warning: ", event.error);
-            // Auto recovers standard silence drop-offs smoothly
-            if (event.error === 'no-speech' && isDecoderEnabled) {
-                restartSpeechEngineSafely();
-            }
+            if (event.error === 'no-speech' && isDecoderEnabled) restartSpeechEngineSafely();
         };
 
         speechRecognitionEngine.onend = () => {
-            if (isDecoderEnabled) {
-                restartSpeechEngineSafely();
-            }
+            if (isDecoderEnabled) restartSpeechEngineSafely();
         };
     }
 
     function restartSpeechEngineSafely() {
         try { speechRecognitionEngine.stop(); } catch(e){}
-        setTimeout(() => {
-            if (isDecoderEnabled) speechRecognitionEngine.start();
-        }, 300);
+        setTimeout(() => { if (isDecoderEnabled) speechRecognitionEngine.start(); }, 300);
     }
 
     function logToTerminal(text) {
         const newLine = document.createElement('div');
         newLine.className = "terminal-line";
         newLine.textContent = text;
-        // Appends lines right above the fluid input layout block
         terminalLog.insertBefore(newLine, interimTextLine.nextSibling);
     }
 
@@ -425,11 +407,8 @@
             v = Math.max(-0.92, Math.min(0.92, v));
             let y = (height / 2) + (v * (height / 2));
 
-            if (i === 0) {
-                canvasCtx.moveTo(x, y);
-            } else {
-                canvasCtx.lineTo(x, y);
-            }
+            if (i === 0) canvasCtx.moveTo(x, y);
+            else canvasCtx.lineTo(x, y);
             x += sliceWidth;
         }
 
@@ -449,13 +428,19 @@
             const response = await fetch(finalUrl);
             let rawStations = await response.json();
             
+            // Prioritize explicit directory targets flagged with cross-origin headers
+            let filteredCORS = rawStations.filter(s => s.has_cors === true || s.has_cors === 1 || s.has_cors === "1");
+            if (filteredCORS.length > 10) {
+                rawStations = filteredCORS;
+            }
+
             const isHttpsMode = window.location.protocol === 'https:';
             if (isHttpsMode) {
                 stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
             } else {
                 stations = rawStations;
             }
-            statusLog.textContent = `Indexed ${stations.length} secure, online stations.`;
+            statusLog.textContent = `Indexed ${stations.length} secure, cross-origin available stations.`;
             if (stations.length === 0) throw new Error("No channels found.");
         } catch (error) {
             console.error(error);
@@ -482,10 +467,19 @@
             const audioEl = new Audio();
             audioEl.preload = "auto";
             
+            // Critical Parameter: Informs the browser to check and request cross-origin data headers
+            audioEl.crossOrigin = "anonymous"; 
+            
+            // Extract the stream and route it straight through the global Biquad Master Tone Filters
+            const sourceNode = audioContext.createMediaElementSource(audioEl);
+            sourceNode.connect(hpFilter);
+
             const audioObj = {
-                element: audioEl
+                element: audioEl,
+                sourceNode: sourceNode
             };
 
+            // Intercept standard security drops or 404 blocks instantly and swap out slots
             audioEl.addEventListener('error', () => {
                 if (isSweeping) assignRandomStation(audioObj);
             });
@@ -523,12 +517,8 @@
         sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
     }
 
-    // Toggle Decoder Trigger
     decoderBtn.addEventListener('click', () => {
-        if (!speechRecognitionEngine) {
-            initSpeechEngine();
-        }
-
+        if (!speechRecognitionEngine) initSpeechEngine();
         if (!speechRecognitionEngine) return;
 
         if (isDecoderEnabled) {
@@ -543,11 +533,7 @@
             decoderBtn.textContent = "DISENGAGE DECODER";
             decoderBtn.classList.add('active-decoding');
             logToTerminal("INITIALIZING MICROPHONE CAPTURE...");
-            try {
-                speechRecognitionEngine.start();
-            } catch(e) {
-                console.log(e);
-            }
+            try { speechRecognitionEngine.start(); } catch(e) {}
         }
     });
 
@@ -561,7 +547,7 @@
             isChannelAudioVoicing = false;
             clearTimeout(sweepTimeout);
             audioPool.forEach(a => a.element.volume = 0);
-            if (activeAudio) activeAudio.volume = 0;
+            if (activeAudio) activeAudio.element.volume = 0;
             
             if (audioContext && audioContext.state === 'running') {
                 await audioContext.suspend();
