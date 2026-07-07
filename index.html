@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (AI Waveform Decoder)</title>
+    <title>Internet Radio Spirit Box (Gated AI Decoder)</title>
     <style>
         body {
             background-color: #121212;
@@ -156,7 +156,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v4.0 // WHISPER AI</h1>
+    <h1>IP-SPIRIT BOX v4.1 // SPEECH GATE</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -220,7 +220,6 @@
 <script type="module">
     import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
     
-    // Disable remote worker constraints to ensure smooth delivery within local runtime domains
     env.allowLocalModels = false;
 
     const BASE_API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=300&hidebroken=true&codec=mp3&order=clickcount";
@@ -237,7 +236,6 @@
     let analyserNode = null; 
     let audioDataArray = null;
     
-    // AI Pipeline Accumulators
     let recorderNode = null;
     let rawAudioAccumulator = [];
     let whisperTranscriber = null;
@@ -302,7 +300,6 @@
         }
     });
 
-    // Initialize the AI Model Engine on App Initialization
     async function initAiModel() {
         try {
             logToTerminal("DOWNLOADING WHISPER MODEL (~75MB)... PLEASE WAIT.");
@@ -340,12 +337,10 @@
         analyserNode.fftSize = 256; 
         audioDataArray = new Uint8Array(analyserNode.frequencyBinCount);
 
-        // Core DSP Interconnection Map
         hpFilter.connect(lpFilter);
         lpFilter.connect(analyserNode);
         analyserNode.connect(audioContext.destination);
 
-        // Capture Node Setup: Extracts post-filter signal array frames for internal processing
         recorderNode = audioContext.createScriptProcessor(4096, 1, 1);
         lpFilter.connect(recorderNode);
         recorderNode.connect(audioContext.destination);
@@ -353,19 +348,16 @@
         recorderNode.onaudioprocess = (e) => {
             if (!isAiDecoderActive || !isSweeping) return;
             const inputData = e.inputBuffer.getChannelData(0);
-            // Push active floating point blocks into the accumulation array
             rawAudioAccumulator.push(...inputData);
 
-            // Once rolling window strikes a 3-second capture ceiling, compile array frames
-            const sampleCeiling = audioContext.sampleRate * 3;
+            const sampleCeiling = audioContext.sampleRate * 3; // 3-second snapshot size
             if (rawAudioAccumulator.length >= sampleCeiling) {
                 const chunkToProcess = new Float32Array(rawAudioAccumulator);
-                rawAudioAccumulator = []; // Instantly flush array cache to minimize memory footprints
+                rawAudioAccumulator = []; 
                 processWaveformWithAi(chunkToProcess);
             }
         };
 
-        // Synthesize Background Static Matrix
         const bufferSize = 2 * audioContext.sampleRate;
         const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
         const output = noiseBuffer.getChannelData(0);
@@ -387,7 +379,6 @@
         renderScopeLoop();
     }
 
-    // Mathematical Waveform Downsampling function to scale system rates down to Whisper's 16kHz expectation
     function downsampleToWhisperRate(buffer, inputSampleRate) {
         const targetSampleRate = 16000;
         if (inputSampleRate === targetSampleRate) return buffer;
@@ -413,17 +404,42 @@
         return result;
     }
 
-    // Feed raw internal data buffer matrix into Whisper Pipeline
+    // UPDATED: AI Processing with dynamic Voice Activity Delta-RMS Gate
     async function processWaveformWithAi(rawFloatArray) {
         if (isAiProcessingFrame || !whisperTranscriber) return;
+
+        // --- THE SPEECH GATE FILTER MATRIX ---
+        // Slice the 3-second frame into 10 sub-windows (300ms each)
+        const totalSamples = rawFloatArray.length;
+        const windowSize = Math.floor(totalSamples / 10);
+        let subWindowRMSValues = [];
+
+        for (let w = 0; w < 10; w++) {
+            let sumSquares = 0;
+            let startIdx = w * windowSize;
+            for (let i = startIdx; i < startIdx + windowSize; i++) {
+                sumSquares += rawFloatArray[i] * rawFloatArray[i];
+            }
+            subWindowRMSValues.push(Math.sqrt(sumSquares / windowSize));
+        }
+
+        // Calculate variance (Max window volume vs Min window volume)
+        const maxRMS = Math.max(...subWindowRMSValues);
+        const minRMS = Math.min(...subWindowRMSValues);
+        const deltaRMS = maxRMS - minRMS; // High dynamic variance indicates jagged voice fragments
+
+        // CRITICAL CHECK: White noise is mathematically flat (deltaRMS near 0). 
+        // If the variance is too small, it's just static. Close the gate!
+        if (deltaRMS < 0.04) {
+            return; 
+        }
+
         isAiProcessingFrame = true;
-        interimTextLine.textContent = "[AI CORE PARSING WAVEFORM EXCERPTS...]";
+        interimTextLine.textContent = "[SPEECH GATE OPEN: ANALYSIS IN PROGRESS]";
 
         try {
-            // Downsample floating array vector sequence to 16000Hz
             const webAsmReadyBuffer = downsampleToWhisperRate(rawFloatArray, audioContext.sampleRate);
 
-            // Compute direct prediction layers from the pure structural bits
             const response = await whisperTranscriber(webAsmReadyBuffer, {
                 chunk_length_s: 30,
                 stride_length_s: 5,
@@ -431,11 +447,21 @@
             });
 
             const parsedText = response.text.trim();
-            if (parsedText.length > 0) {
-                logToTerminal(`[AI DETECTED]: ${parsedText.toUpperCase()}`, true);
+            
+            // Clean up formatting: Strip out common AI hallucination placeholders and punctuation errors
+            const cleanText = parsedText
+                .replace(/\[.*?\]/g, "") // Drops meta tags like [MUSIC] or [LAUGHTER]
+                .replace(/\(.*?\)/g, "")
+                .replace(/[^a-zA-Z\s]/g, "") // Drops single standing punctuation marks
+                .trim()
+                .toUpperCase();
+
+            // Only log if the string contains actual structural words
+            if (cleanText.length > 2) {
+                logToTerminal(`[SPEECH]: ${cleanText}`, true);
             }
         } catch (err) {
-            console.error("Inference Processing Hiccup:", err);
+            console.error("Inference Engine Snag:", err);
         } finally {
             isAiProcessingFrame = false;
             interimTextLine.textContent = isAiDecoderActive ? "[AI WAVEFORM ANALYSIS ACTIVE]" : "";
@@ -498,7 +524,6 @@
             const response = await fetch(finalUrl);
             let rawStations = await response.json();
             
-            // Enforce explicit CORS compliance filters to guarantee unmuted internal data extraction
             let filteredCORS = rawStations.filter(s => s.has_cors === true || s.has_cors === 1 || s.has_cors === "1");
             if (filteredCORS.length > 10) {
                 rawStations = filteredCORS;
@@ -583,7 +608,6 @@
         sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
     }
 
-    // Toggle AI Decoder Loop
     decoderBtn.addEventListener('click', () => {
         if (!whisperTranscriber) return;
 
@@ -593,14 +617,14 @@
             decoderBtn.classList.remove('active-decoding');
             interimTextLine.textContent = '';
             rawAudioAccumulator = [];
-            logToTerminal("AI COGNITIVE TRANSLATION GRAPH DISENGAGED.");
+            logToTerminal("AI SPEECH FILTER MATRIX OFF.");
         } else {
             isAiDecoderActive = true;
             decoderBtn.textContent = "DISENGAGE AI DECODER";
             decoderBtn.classList.add('active-decoding');
             interimTextLine.textContent = "[AI WAVEFORM ANALYSIS ACTIVE]";
             rawAudioAccumulator = [];
-            logToTerminal("AI RUNTIME DETACHED FROM PHYSICAL AIR: INFERENCE NODE ONLINE.");
+            logToTerminal("AI SPEECH FILTER MATRIX RUNNING... TRACKING DYNAMIC WAVEFORMS.");
         }
     });
 
@@ -638,7 +662,6 @@
         }
     });
 
-    // Run Fetch pipeline and call model download functions on script load
     fetchStations();
     initAiModel();
     renderScopeLoop();
