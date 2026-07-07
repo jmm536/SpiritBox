@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Hardened)</title>
+    <title>Internet Radio Spirit Box (Static Fixed)</title>
     <style>
         body {
             background-color: #121212;
@@ -97,7 +97,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v2</h1>
+    <h1>IP-SPIRIT BOX v2.1</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -126,9 +126,8 @@
 </div>
 
 <script>
-    // Using a fallback pool of regional APIs in case one is slow
     const API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=300&hidebroken=true&codec=mp3&order=clickcount";
-    const POOL_SIZE = 8; // Expanded pool size for better statistical buffer density
+    const POOL_SIZE = 8;
     
     let stations = [];
     let audioPool = [];
@@ -187,8 +186,6 @@
             const response = await fetch(API_URL);
             let rawStations = await response.json();
             
-            // SECURITY ENFORCEMENT: If running app on an https:// host, drop http:// links 
-            // to stop browser Mixed-Content silent blocking.
             const isHttpsMode = window.location.protocol === 'https:';
             if (isHttpsMode) {
                 stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
@@ -214,8 +211,7 @@
         audioElement.stationData = randomTarget;
         audioElement.volume = 0;
         
-        // Quietly try to spin up stream background playback
-        audioElement.play().catch(() => { /* Absorb interface autoplay blockers safely */ });
+        audioElement.play().catch(() => {});
     }
 
     function buildAudioPool() {
@@ -225,11 +221,8 @@
             const audio = new Audio();
             audio.preload = "auto";
             
-            // CRITICAL UPGRADE: The Active Error Catcher Loop
-            // If stream drops packet, throws 404, or hits CORS snags, dump it and grab a fresh channel immediately
             audio.addEventListener('error', () => {
                 if (isSweeping) {
-                    console.log("Stalled stream detected. Rotating out slot...");
                     assignRandomStation(audio);
                 }
             });
@@ -244,15 +237,11 @@
 
         if (activeAudio) {
             activeAudio.volume = 0;
-            
-            // 40% probability to dynamically flush this slot completely 
-            // after it speaks to maintain randomized sound textures
             if (Math.random() < 0.40) {
                 assignRandomStation(activeAudio);
             }
         }
 
-        // Filter the pool looking only for streams that have successfully populated data packets (readyState >= 2)
         const readyChannels = audioPool.filter(a => a.readyState >= 2 && !a.paused && !a.error);
 
         if (readyChannels.length > 0) {
@@ -263,7 +252,6 @@
             stationNameDiv.textContent = cleanName || "UNKNOWN BAND";
             stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.stationData.countrycode || 'GLOBAL'}`;
         } else {
-            // If everything is catching up or cycling, show tuning states
             stationNameDiv.textContent = "TUNING DIAL...";
             stationInfoDiv.textContent = `RE-BUFFERING BANDS (${audioPool.filter(a => a.readyState < 2).length} STALLED)`;
             activeAudio = null;
@@ -276,23 +264,36 @@
         if (!audioContext) {
             initStaticNoise();
         }
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-        }
-
+        
         if (isSweeping) {
+            // STOP ACTION
             isSweeping = false;
             clearTimeout(sweepTimeout);
+            
+            // Mute background radio pools
             audioPool.forEach(a => a.volume = 0);
             if (activeAudio) activeAudio.volume = 0;
+            
+            // FIX: Suspend the Web Audio engine entirely to kill the generated static noise
+            if (audioContext && audioContext.state === 'running') {
+                await audioContext.suspend();
+            }
+            
             startBtn.textContent = "START SWEEP";
             stationNameDiv.textContent = "SWEEP HALTED";
             stationInfoDiv.textContent = "SYSTEM STANDBY";
         } else {
+            // START ACTION
             if (stations.length === 0) {
                 statusLog.textContent = "Error: Directory not populated yet.";
                 return;
             }
+            
+            // Wake the audio engine back up if it was suspended
+            if (audioContext && audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            
             buildAudioPool();
             isSweeping = true;
             startBtn.textContent = "STOP SWEEP";
