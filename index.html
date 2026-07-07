@@ -98,7 +98,7 @@
         </div>
     </div>
     <script>
-        let audioElements = [], isSweeping = false, isLoading = false, audioCtx, bassFilter, trebleFilter, bandpassNode, analyser, masterGainNode, sweepTimer, staticGainNode, reverbNode, wetGainNode;
+        let audioElements = [], isSweeping = false, isLoading = false, audioCtx, bassFilter, trebleFilter, bandpassNode, analyser, masterGainNode, sweepTimer, staticGainNode, staticSource, reverbNode, wetGainNode;
         let vals = { sweep: 200, static: 5, bass: 0, treble: 0, reverb: 0 };
         const powerBtn = document.getElementById('power-btn'), stationDisplay = document.getElementById('station'), statusDisplay = document.getElementById('status'), rateDisplay = document.getElementById('rate-display'), langFilterSelect = document.getElementById('lang-filter'), poolSizeSelect = document.getElementById('pool-size'), isolationToggle = document.getElementById('effect-isolation'), clickToggle = document.getElementById('effect-click'), canvas = document.getElementById('waveform-canvas'), canvasCtx = canvas.getContext('2d');
 
@@ -162,9 +162,12 @@
                 masterGainNode.connect(audioCtx.destination);
                 
                 staticGainNode = audioCtx.createGain(); staticGainNode.gain.value = vals.static / 100; staticGainNode.connect(bassFilter);
-                const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0); for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
-                const source = audioCtx.createBufferSource(); source.buffer = noiseBuffer; source.loop = true; source.connect(staticGainNode); source.start();
                 drawWaveform();
+            }
+            
+            if(!staticSource) {
+                const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0); for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
+                staticSource = audioCtx.createBufferSource(); staticSource.buffer = noiseBuffer; staticSource.loop = true; staticSource.connect(staticGainNode); staticSource.start();
             }
             if (audioCtx.state === 'suspended') audioCtx.resume();
         }
@@ -212,6 +215,7 @@
             } else {
                 isSweeping = false; clearInterval(sweepTimer); powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY"; poolSizeSelect.disabled = false; langFilterSelect.disabled = false;
                 audioElements.forEach(a => { a.pause(); a.src = ""; }); audioElements = [];
+                if(staticSource) { staticSource.stop(); staticSource = null; }
             }
         });
         isolationToggle.onchange = (e) => { if(bandpassNode) bandpassNode.type = e.target.checked ? 'bandpass' : 'allpass'; };
