@@ -3,461 +3,302 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Absolute Magnetic Orientation Sonograph</title>
+    <title>Internet Radio Spirit Box</title>
     <style>
-        :root {
-            --bg-color: #111113;
-            --panel-color: #17171c;
-            --accent-color: #ff9900;
-            --alert-color: #ff3333;
-            --text-color: #e2e2e8;
-        }
-
         body {
+            background-color: #121212;
+            color: #00ff66;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
             margin: 0;
-            padding: 15px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        h1 {
-            margin: 0 0 5px 0;
-            font-size: 1.4rem;
-            letter-spacing: 0.5px;
-            color: #fff;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            background: #25252b;
-            font-weight: bold;
-        }
-
-        .status-active { color: var(--accent-color); background: rgba(255, 153, 0, 0.1); }
-        .status-alert { color: var(--alert-color); background: rgba(255, 51, 51, 0.1); animation: pulse 1s infinite alternate; }
-
-        @keyframes pulse {
-            from { opacity: 0.6; }
-            to { opacity: 1; }
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        @media (max-width: 600px) {
-            .dashboard { grid-template-columns: 1fr; }
-        }
-
-        .panel {
-            background-color: var(--panel-color);
-            border: 1px solid #26262e;
-            border-radius: 8px;
-            padding: 15px;
-        }
-
-        .readout {
-            font-size: 2.6rem;
-            font-weight: 700;
-            font-family: monospace;
-            text-align: center;
-            margin: 15px 0;
-            color: #fff;
-        }
-
-        .unit { font-size: 1.1rem; color: #888; font-weight: normal; }
-
-        .axes-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            text-align: center;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-
-        .axis { padding: 6px; background: #1f1f26; border-radius: 4px; }
-        .axis span { display: block; color: #888; font-size: 0.75rem; }
-
-        .controls label {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 0.9rem;
-        }
-
-        .controls input {
-            width: 100%;
-            padding: 8px;
-            background: #1f1f26;
-            border: 1px solid #363642;
-            border-radius: 4px;
-            color: #fff;
-            margin-top: 4px;
+            padding: 20px;
             box-sizing: border-box;
         }
-
-        .btn-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        button {
-            padding: 12px;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-size: 0.95rem;
-        }
-
-        .btn-start { background-color: var(--accent-color); color: #000; }
-        .btn-start:hover { background-color: #ffaa22; }
-        .btn-stop { background-color: #2c2c35; color: #fff; }
-        .btn-stop:hover { background-color: #3a3a46; }
-        .btn-export { background-color: #2196F3; color: #fff; grid-column: span 2; }
-
-        canvas {
-            width: 100%;
-            height: 220px;
-            background-color: #070709;
+        .container {
+            border: 2px solid #00ff66;
+            padding: 30px;
+            background-color: #1a1a1a;
+            box-shadow: 0 0 20px rgba(0, 255, 102, 0.2);
             border-radius: 8px;
-            border: 1px solid #26262e;
-            display: block;
-            margin-bottom: 15px;
+            width: 100%;
+            max-width: 500px;
         }
-
-        .log-panel {
-            max-height: 140px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 0.8rem;
-            background: #070709;
-            padding: 10px;
+        h1 {
+            text-align: center;
+            margin-top: 0;
+            text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
+            font-size: 1.8rem;
+            letter-spacing: 2px;
+        }
+        .display {
+            background-color: #000;
+            border: 1px solid #00ff66;
+            padding: 15px;
+            height: 90px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 1.2rem;
+            overflow: hidden;
             border-radius: 4px;
-            border: 1px solid #26262e;
         }
-
-        .log-entry {
-            padding: 3px 0;
-            border-bottom: 1px solid #14141a;
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .control-row {
             display: flex;
             justify-content: space-between;
         }
-        .log-entry.alert-row { color: var(--alert-color); font-weight: bold; }
+        button {
+            background-color: #00ff66;
+            color: #000;
+            border: none;
+            padding: 15px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #00cc52;
+            box-shadow: 0 0 12px rgba(0, 255, 102, 0.6);
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #00ff66;
+            cursor: pointer;
+        }
+        .status {
+            font-size: 0.75rem;
+            color: #666;
+            text-align: center;
+            margin-top: 20px;
+            border-top: 1px dashed #333;
+            padding-top: 10px;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <header>
-        <h1>Absolute Geo-Magnetic Compass Tracker</h1>
-        <div id="statusBadge" class="status-badge">System Initialized</div>
-    </header>
+    <h1>IP-SPIRIT BOX</h1>
+    
+    <div class="display" id="display">
+        <div id="station-name">SYSTEM READY</div>
+        <div id="station-info" style="font-size: 0.8rem; color: #00aa44; margin-top: 8px;">TAP START TO INITIALIZE BANDS</div>
+    </div>
 
-    <canvas id="sonographCanvas"></canvas>
-
-    <div class="dashboard">
-        <div class="panel">
-            <h3>Magnetic Heading</h3>
-            <div class="readout" id="headingReadout">0.00 <span class="unit">° Z (α)</span></div>
-            <div class="axes-grid">
-                <div class="axis"><span id="valBeta">0.00°</span><span>Pitch (β)</span></div>
-                <div class="axis"><span id="valGamma">0.00°</span><span>Roll (γ)</span></div>
+    <div class="controls">
+        <button id="start-btn">START SWEEP</button>
+        
+        <div class="control-group">
+            <div class="control-row">
+                <label for="sweep-rate">Sweep Rate: <strong><span id="rate-val">300</span>ms</strong></label>
             </div>
+            <input type="range" id="sweep-rate" min="150" max="1500" step="50" value="300">
         </div>
 
-        <div class="panel controls">
-            <h3>Fluctuation Alert</h3>
-            <label>
-                Tolerance Window ($\Delta$ Degrees):
-                <input type="number" id="toleranceInput" value="3.0" step="0.1" min="0.1">
-            </label>
-            <label>
-                Duration Window (Seconds):
-                <input type="number" id="durationInput" value="4" step="1" min="1">
-            </label>
-            <div class="btn-group">
-                <button class="btn-start" id="startBtn">Connect Stream</button>
-                <button class="btn-stop" id="stopBtn" disabled>Disconnect</button>
-                <button class="btn-export" id="exportBtn" disabled>Export Time Log (.CSV)</button>
+        <div class="control-group">
+            <div class="control-row">
+                <label for="static-vol">Radio Static Volume: <strong><span id="static-val">25</span>%</strong></label>
             </div>
+            <input type="range" id="static-vol" min="0" max="100" value="25">
         </div>
     </div>
 
-    <div class="panel">
-        <h3>Live Event Stream</h3>
-        <div class="log-panel" id="logPanel">
-            <div style="color: #666;">Waiting for hardware calibration activation sequence...</div>
-        </div>
-    </div>
+    <div class="status" id="status-log">Connecting to open directory...</div>
 </div>
 
 <script>
-    let isMonitoring = false;
-    let dataHistory = []; 
-    let plotPoints = [];
-    const maxPlotPoints = 300;
-    let audioCtx = null;
-    let alertActive = false;
+    // Public Open-Source API Configuration (Radio-Browser Directory)
+    // Pulls active, highly voted MP3 streams to optimize browser playback compatibility
+    const API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=200&hidebroken=true&codec=mp3&order=clickcount";
+    const POOL_SIZE = 6; // Total background streams running concurrently
+    
+    let stations = [];
+    let audioPool = [];
+    let audioContext = null;
+    let staticNode = null;
+    let staticGain = null;
+    
+    let isSweeping = false;
+    let sweepTimeout = null;
+    let activeAudio = null;
 
-    const canvas = document.getElementById('sonographCanvas');
-    const ctx = canvas.getContext('2d');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const exportBtn = document.getElementById('exportBtn');
-    const toleranceInput = document.getElementById('toleranceInput');
-    const durationInput = document.getElementById('durationInput');
-    const statusBadge = document.getElementById('statusBadge');
-    const logPanel = document.getElementById('logPanel');
+    // DOM Target Elements
+    const startBtn = document.getElementById('start-btn');
+    const sweepRateInput = document.getElementById('sweep-rate');
+    const rateVal = document.getElementById('rate-val');
+    const staticVolInput = document.getElementById('static-vol');
+    const staticVal = document.getElementById('static-val');
+    const stationNameDiv = document.getElementById('station-name');
+    const stationInfoDiv = document.getElementById('station-info');
+    const statusLog = document.getElementById('status-log');
 
-    function resizeCanvas() {
-        canvas.width = canvas.clientWidth * window.devicePixelRatio;
-        canvas.height = canvas.clientHeight * window.devicePixelRatio;
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    function initAudio() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // UI Listeners
+    sweepRateInput.addEventListener('input', () => rateVal.textContent = sweepRateInput.value);
+    staticVolInput.addEventListener('input', () => {
+        staticVal.textContent = staticVolInput.value;
+        if (staticGain) {
+            // Normalizing static volume to keep background white noise comfortable
+            staticGain.gain.value = (staticVolInput.value / 100) * 0.12; 
         }
-    }
+    });
 
-    function playAlertTone() {
-        if (!audioCtx) return;
-        let osc = audioCtx.createOscillator();
-        let gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5 note 
-        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.15);
-    }
-
-    startBtn.addEventListener('click', async () => {
-        initAudio();
+    // Synthesize Web Audio White Noise to simulate analog RF static
+    function initStaticNoise() {
+        if (audioContext) return;
         
-        // Confirm fallback interface availability
-        if (!('ondeviceorientationabsolute' in window) && !('ondeviceorientation' in window)) {
-            updateStatus("APIs Blocked/Missing", "status-alert");
-            alert("This device context does not support Web Orientation interface tracking loops.");
-            return;
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const bufferSize = 2 * audioContext.sampleRate;
+        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
         }
 
+        staticNode = audioContext.createBufferSource();
+        staticNode.buffer = noiseBuffer;
+        staticNode.loop = true;
+
+        staticGain = audioContext.createGain();
+        staticGain.gain.value = (staticVolInput.value / 100) * 0.12;
+
+        staticNode.connect(staticGain);
+        staticGain.connect(audioContext.destination);
+        staticNode.start();
+    }
+
+    // Fetch live stream array from the open API directory
+    async function fetchStations() {
         try {
-            // Standardizing cross-browser modern security permission requests
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                const response = await DeviceOrientationEvent.requestPermission();
-                if (response !== 'granted') {
-                    alert("Hardware telemetry streaming access was explicitly denied.");
-                    return;
-                }
+            statusLog.textContent = "Querying live global radio indexes...";
+            const response = await fetch(API_URL);
+            stations = await response.json();
+            if (stations.length === 0) throw new Error("Directory returned empty.");
+            statusLog.textContent = `Successfully indexed ${stations.length} global streams.`;
+        } catch (error) {
+            console.error(error);
+            statusLog.textContent = "Directory query failed. Retrying backend fetch...";
+            setTimeout(fetchStations, 4000);
+        }
+    }
+
+    // Swap a stream slot out for an entirely new random target from the directory pool
+    function assignRandomStation(audioElement) {
+        if (!stations.length) return;
+        const randomTarget = stations[Math.floor(Math.random() * stations.length)];
+        
+        audioElement.src = randomTarget.url_resolved || randomTarget.url;
+        audioElement.stationData = randomTarget;
+        audioElement.volume = 0;
+        
+        // Background play immediately so it pre-buffers silently 
+        audioElement.play().catch(() => { /* Catch browser auto-play guard blocks */ });
+    }
+
+    // Pre-populate our background streaming objects
+    function buildAudioPool() {
+        if (audioPool.length > 0) return;
+
+        for (let i = 0; i < POOL_SIZE; i++) {
+            const audio = new Audio();
+            audio.crossOrigin = "anonymous";
+            audio.preload = "auto";
+            assignRandomStation(audio);
+            audioPool.push(audio);
+        }
+    }
+
+    // Execution Core: The Sweep Interval Loop
+    function executeSweep() {
+        if (!isSweeping) return;
+
+        // Instantly mute the station from the previous tick
+        if (activeAudio) {
+            activeAudio.volume = 0;
+            
+            // 35% chance to hot-swap this audio node to a brand new global channel.
+            // This guarantees an infinite, ever-changing selection of channels.
+            if (Math.random() < 0.35) {
+                assignRandomStation(activeAudio);
             }
+        }
 
-            // Bind to the absolute hardware event pipeline (forces magnetometer stream usage)
-            if ('ondeviceorientationabsolute' in window) {
-                window.addEventListener('deviceorientationabsolute', handleOrientationReading, true);
-            } else {
-                window.addEventListener('deviceorientation', handleOrientationReading, true);
+        // Filter out nodes that haven't received enough data packets yet (readyState < 2)
+        const readyChannels = audioPool.filter(a => a.readyState >= 2 && !a.paused);
+
+        if (readyChannels.length > 0) {
+            // Pick a random stream that has successfully buffered audio data
+            activeAudio = readyChannels[Math.floor(Math.random() * readyChannels.length)];
+            
+            // Blast the fragment audio
+            activeAudio.volume = 1.0;
+
+            // Visual tracking updates
+            const cleanName = activeAudio.stationData.name.trim().toUpperCase().substring(0, 24);
+            stationNameDiv.textContent = cleanName || "UNKNOWN BAND";
+            stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.stationData.countrycode || 'GLOBAL'}`;
+        } else {
+            // If network stutters occur and nothing is buffered, output purely static behaviors
+            stationNameDiv.textContent = "TUNING DIAL...";
+            stationInfoDiv.textContent = "BUFFERING CHANNELS...";
+            activeAudio = null;
+        }
+
+        // Dynamically recalculate delay based on UI slider choices
+        sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
+    }
+
+    // Master Toggle Control
+    startBtn.addEventListener('click', async () => {
+        // Handle User Interactivity constraints enforced by modern browsers for audio playback
+        if (!audioContext) {
+            initStaticNoise();
+        }
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
+
+        if (isSweeping) {
+            isSweeping = false;
+            clearTimeout(sweepTimeout);
+            if (activeAudio) activeAudio.volume = 0;
+            startBtn.textContent = "START SWEEP";
+            stationNameDiv.textContent = "SWEEP HALTED";
+            stationInfoDiv.textContent = "SYSTEM STANDBY";
+        } else {
+            if (stations.length === 0) {
+                statusLog.textContent = "Cannot start: Awaiting network index connection.";
+                return;
             }
-
-            isMonitoring = true;
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            exportBtn.disabled = false;
-            updateStatus("Streaming Absolute Data", "status-active");
-            logPanel.innerHTML = ""; 
-            animatePlot();
-
-        } catch (err) {
-            console.error(err);
-            updateStatus("Stream Failure", "status-alert");
+            buildAudioPool();
+            isSweeping = true;
+            startBtn.textContent = "STOP SWEEP";
+            executeSweep();
         }
     });
 
-    stopBtn.addEventListener('click', () => {
-        if ('ondeviceorientationabsolute' in window) {
-            window.removeEventListener('deviceorientationabsolute', handleOrientationReading, true);
-        } else {
-            window.removeEventListener('deviceorientation', handleOrientationReading, true);
-        }
-        isMonitoring = false;
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        updateStatus("Stream Paused", "");
-    } );
-
-    function updateStatus(text, className) {
-        statusBadge.textContent = text;
-        statusBadge.className = "status-badge " + className;
-    }
-
-    function handleOrientationReading(e) {
-        if (!isMonitoring) return;
-
-        const now = Date.now();
-        // Alpha represents vector rotation around the physical device Z-axis [0 to 360 degrees)
-        const alpha = e.alpha !== null ? e.alpha : 0;
-        const beta = e.beta !== null ? e.beta : 0;
-        const gamma = e.gamma !== null ? e.gamma : 0;
-
-        document.getElementById('headingReadout').innerHTML = `${alpha.toFixed(2)}<span class="unit">°</span>`;
-        document.getElementById('valBeta').textContent = `${beta.toFixed(1)}°`;
-        document.getElementById('valGamma').textContent = `${gamma.toFixed(1)}°`;
-
-        const record = {
-            epoch: now,
-            isoString: new Date(now).toISOString(),
-            alpha: alpha.toFixed(4),
-            beta: beta.toFixed(4),
-            gamma: gamma.toFixed(4),
-            alertTriggered: false
-        };
-
-        dataHistory.push(record);
-        plotPoints.push(alpha);
-        if (plotPoints.length > maxPlotPoints) plotPoints.shift();
-
-        evaluateAlertWindow(now, alpha, record);
-    }
-
-    function evaluateAlertWindow(currentTime, currentAlpha, currentRecord) {
-        const durationSec = parseFloat(durationInput.value) || 4;
-        const tolerance = parseFloat(toleranceInput.value) || 3;
-        const windowThresholdMs = durationSec * 1000;
-
-        let minVal = currentAlpha;
-        let maxVal = currentAlpha;
-
-        for (let i = dataHistory.length - 1; i >= 0; i--) {
-            if (currentTime - dataHistory[i].epoch > windowThresholdMs) break;
-            
-            const aVal = parseFloat(dataHistory[i].alpha);
-            
-            // Basic adjustment handling for angular wrapped boundaries
-            if (Math.abs(aVal - currentAlpha) < 180) {
-                if (aVal < minVal) minVal = aVal;
-                if (aVal > maxVal) maxVal = aVal;
-            }
-        }
-
-        const delta = maxVal - minVal;
-
-        if (delta > tolerance) {
-            currentRecord.alertTriggered = true;
-            if (!alertActive) {
-                alertActive = true;
-                updateStatus("VECTOR DEFLECTION DETECTED", "status-alert");
-                playAlertTone();
-                appendLogEntry(`[SHIFT] Deflection: ${delta.toFixed(2)}° deviation over ${durationSec}s`, true);
-            }
-        } else {
-            if (alertActive) {
-                alertActive = false;
-                updateStatus("Streaming Absolute Data", "status-active");
-            }
-        }
-    }
-
-    function appendLogEntry(message, isAlert = false) {
-        const entry = document.createElement('div');
-        entry.className = `log-entry ${isAlert ? 'alert-row' : ''}`;
-        
-        const timeSpan = document.createElement('span');
-        timeSpan.textContent = new Date().toLocaleTimeString();
-        
-        const msgSpan = document.createElement('span');
-        msgSpan.textContent = message;
-        
-        entry.appendChild(timeSpan);
-        entry.appendChild(msgSpan);
-        logPanel.insertBefore(entry, logPanel.firstChild);
-    }
-
-    function animatePlot() {
-        if (!isMonitoring) return;
-
-        const w = canvas.width;
-        const h = canvas.height;
-        ctx.clearRect(0, 0, w, h);
-
-        ctx.strokeStyle = '#1a1a22';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < h; i += h / 5) {
-            ctx.beginPath();
-            ctx.moveTo(0, i);
-            ctx.lineTo(w, i);
-            ctx.stroke();
-        }
-
-        if (plotPoints.length > 1) {
-            ctx.beginPath();
-            ctx.lineWidth = 3;
-            
-            const maxVal = Math.max(...plotPoints) + 2; 
-            const minVal = Math.min(...plotPoints) - 2;
-            const range = (maxVal - minVal) || 1;
-
-            ctx.strokeStyle = alertActive ? '#ff3333' : '#ff9900';
-
-            for (let i = 0; i < plotPoints.length; i++) {
-                const xPos = (i / (maxPlotPoints - 1)) * w;
-                const yPos = h - ((plotPoints[i] - minVal) / range) * h; 
-
-                if (i === 0) ctx.moveTo(xPos, yPos);
-                else ctx.lineTo(xPos, yPos);
-            }
-            ctx.stroke();
-
-            ctx.lineTo(w * (plotPoints.length - 1) / (maxPlotPoints - 1), h);
-            ctx.lineTo(0, h);
-            ctx.fillStyle = alertActive ? 'rgba(255, 51, 51, 0.03)' : 'rgba(255, 153, 0, 0.03)';
-            ctx.fill();
-        }
-
-        requestAnimationFrame(animatePlot);
-    }
-
-    exportBtn.addEventListener('click', () => {
-        if (dataHistory.length === 0) return;
-
-        let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Timestamp (ISO),Epoch (ms),Heading Alpha (deg),Pitch Beta (deg),Roll Gamma (deg),Threshold Breach\n";
-
-        dataHistory.forEach(r => {
-            csvContent += `${r.isoString},${r.epoch},${r.alpha},${r.beta},${r.gamma},${r.alertTriggered}\n`;
-        });
-
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `absolute_orientation_${Date.now()}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    });
+    // Run fetch pipeline on application initialization
+    fetchStations();
 </script>
 
 </body>
