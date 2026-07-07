@@ -140,7 +140,10 @@
                 masterGainNode.connect(audioCtx.destination);
                 staticGainNode = audioCtx.createGain(); staticGainNode.gain.value = vals.static / 100; staticGainNode.connect(bassFilter);
                 
+                // Create static buffer
                 const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0); for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
+                
+                // Start static
                 staticSource = audioCtx.createBufferSource(); staticSource.buffer = noiseBuffer; staticSource.loop = true; staticSource.connect(staticGainNode); staticSource.start();
                 runLoop();
             }
@@ -153,7 +156,6 @@
             if (analyser) {
                 const dataArray = new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(dataArray);
                 
-                // Calculate RMS to determine signal level
                 let sum = 0;
                 for(let i = 0; i < dataArray.length; i++) {
                     const val = (dataArray[i] - 128) / 128;
@@ -162,7 +164,7 @@
                 let rms = Math.sqrt(sum / dataArray.length);
                 
                 canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.beginPath();
-                canvasCtx.strokeStyle = (rms > 0.05) ? '#ff3333' : '#4af626';
+                canvasCtx.strokeStyle = (rms > 0.05) ? '#ffa500' : '#4af626';
                 for (let i = 0; i < dataArray.length; i++) canvasCtx.lineTo(i * (canvas.width/dataArray.length), (dataArray[i]/128.0) * canvas.height/2);
                 canvasCtx.stroke();
             }
@@ -189,10 +191,19 @@
                     try { audioCtx.createMediaElementSource(a).connect(bassFilter); } catch (e) {}
                     a.play().catch(()=>{}); audioElements.push(a);
                 });
+                // Ensure static starts playing
+                if (!staticSource) {
+                    const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+                    const output = noiseBuffer.getChannelData(0); 
+                    for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
+                    staticSource = audioCtx.createBufferSource(); staticSource.buffer = noiseBuffer; staticSource.loop = true; staticSource.connect(staticGainNode); staticSource.start();
+                }
                 isSweeping = true; powerBtn.classList.add('active'); powerBtn.innerText = "Stop Sweep"; statusDisplay.innerText = "STATUS: SWEEPING";
             } else {
                 isSweeping = false; powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY";
-                audioElements.forEach(a => { a.pause(); a.src = ""; }); audioElements = [];
+                audioElements.forEach(a => { a.pause(); a.src = ""; }); 
+                audioElements = [];
+                if(staticSource) { staticSource.stop(); staticSource = null; }
             }
         });
         isolationToggle.onchange = (e) => { if(bandpassNode) bandpassNode.type = e.target.checked ? 'bandpass' : 'allpass'; };
