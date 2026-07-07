@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (DSP Processing Engine)</title>
+    <title>Internet Radio Spirit Box (DSP + Language Matrix)</title>
     <style>
         body {
             background-color: #121212;
@@ -81,10 +81,20 @@
             background-color: #00cc52;
             box-shadow: 0 0 12px rgba(0, 255, 102, 0.6);
         }
-        input[type="range"] {
+        input[type="range"], select {
             width: 100%;
             accent-color: #00ff66;
             cursor: pointer;
+        }
+        select {
+            background-color: #000;
+            color: #00ff66;
+            border: 1px solid #00ff66;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 1rem;
+            border-radius: 4px;
+            outline: none;
         }
         .status {
             font-size: 0.75rem;
@@ -99,7 +109,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v3.0 // DSP</h1>
+    <h1>IP-SPIRIT BOX v3.1 // DSP</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -109,6 +119,16 @@
     <div class="controls">
         <button id="start-btn">START SWEEP</button>
         
+        <div class="control-group">
+            <div class="control-row">
+                <label for="lang-select">Language Filter Matrix:</label>
+            </div>
+            <select id="lang-select">
+                <option value="all">All Global Languages (Random Mix)</option>
+                <option value="english">English Only</option>
+            </select>
+        </div>
+
         <div class="control-group">
             <div class="control-row">
                 <label for="sweep-rate">Sweep Rate: <strong><span id="rate-val">200</span>ms</strong></label>
@@ -149,27 +169,27 @@
 </div>
 
 <script>
-    const API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=300&hidebroken=true&codec=mp3&order=clickcount";
+    const BASE_API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=300&hidebroken=true&codec=mp3&order=clickcount";
     const POOL_SIZE = 8;
     
     let stations = [];
     let audioPool = [];
     
-    // Core Web Audio API Nodes
     let audioContext = null;
     let staticNode = null;
     let staticGain = null;
-    let hpFilter = null;      // Bass Control
-    let lpFilter = null;      // Treble Control
-    let formantFilterL = null;// Low Formant Peak Resonator
-    let formantFilterH = null;// High Formant Peak Resonator
+    let hpFilter = null;      
+    let lpFilter = null;      
+    let formantFilterL = null;
+    let formantFilterH = null;
     
     let isSweeping = false;
     let sweepTimeout = null;
     let activeAudio = null;
 
-    // DOM Wire Elements
+    // DOM Target Elements
     const startBtn = document.getElementById('start-btn');
+    const langSelect = document.getElementById('lang-select');
     const sweepRateInput = document.getElementById('sweep-rate');
     const rateVal = document.getElementById('rate-val');
     const formantInput = document.getElementById('formant-shift');
@@ -184,7 +204,7 @@
     const stationInfoDiv = document.getElementById('station-info');
     const statusLog = document.getElementById('status-log');
 
-    // UI Sliders Reactive Processing
+    // UI Sliders Listener Events
     sweepRateInput.addEventListener('input', () => rateVal.textContent = sweepRateInput.value);
     
     bassInput.addEventListener('input', () => {
@@ -207,44 +227,49 @@
         if (val < 35) formantVal.textContent = "Deep (Ooo)";
         else if (val > 65) formantVal.textContent = "Bright (Eee)";
         else formantVal.textContent = "Neutral";
-        
         updateFormantFrequencies(val);
     });
 
-    // Calculates vocal vocalization tract values using dynamic slider parameters
+    // Handle On-the-Fly Language Swapping
+    langSelect.addEventListener('change', async () => {
+        statusLog.textContent = "Reloading station directory filters...";
+        await fetchStations();
+        
+        // If actively running, force background streams to flush and sync to the new language targets
+        if (isSweeping && audioPool.length > 0) {
+            console.log("Hot-swapping active streaming pool to match chosen language filter.");
+            audioPool.forEach(audioObj => {
+                assignRandomStation(audioObj);
+            });
+        }
+    });
+
     function updateFormantFrequencies(sliderValue) {
         if (!formantFilterL || !formantFilterH) return;
         const pct = sliderValue / 100;
-        
-        // Maps lower and higher structural harmonic formants linearly
-        const lowF = 350 + (pct * 450);    // Sweeps 350Hz - 800Hz
-        const highF = 900 + (pct * 1900);  // Sweeps 900Hz - 2800Hz
-        
+        const lowF = 350 + (pct * 450);    
+        const highF = 900 + (pct * 1900);  
         formantFilterL.frequency.setValueAtTime(lowF, audioContext.currentTime);
         formantFilterH.frequency.setValueAtTime(highF, audioContext.currentTime);
     }
 
-    // Instantiates processing core filters and white noise generator nodes
     function initAudioEngine() {
         if (audioContext) return;
         
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
-        // Tone Node Setup: Highpass (Bass EQ Layer)
         hpFilter = audioContext.createBiquadFilter();
         hpFilter.type = "highpass";
         hpFilter.frequency.setValueAtTime(parseFloat(bassInput.value), audioContext.currentTime);
 
-        // Tone Node Setup: Lowpass (Treble EQ Layer)
         lpFilter = audioContext.createBiquadFilter();
         lpFilter.type = "lowpass";
         lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
 
-        // Formant Resonators: Dual Peaking Filters with High Q Factors
         formantFilterL = audioContext.createBiquadFilter();
         formantFilterL.type = "peaking";
-        formantFilterL.Q.setValueAtTime(7.0, audioContext.currentTime); // High sharpness (resonance)
-        formantFilterL.gain.setValueAtTime(14, audioContext.currentTime); // High Boost 
+        formantFilterL.Q.setValueAtTime(7.0, audioContext.currentTime);
+        formantFilterL.gain.setValueAtTime(14, audioContext.currentTime);
 
         formantFilterH = audioContext.createBiquadFilter();
         formantFilterH.type = "peaking";
@@ -253,14 +278,11 @@
 
         updateFormantFrequencies(parseInt(formantInput.value));
 
-        // Processing Pipeline Interconnection:
-        // Source signals -> Bass Cut -> Treble Cut -> Low Formant -> High Formant -> Speakers
         hpFilter.connect(lpFilter);
         lpFilter.connect(formantFilterL);
         formantFilterL.connect(formantFilterH);
         formantFilterH.connect(audioContext.destination);
 
-        // Synthesize Background Static Matrix
         const bufferSize = 2 * audioContext.sampleRate;
         const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
         const output = noiseBuffer.getChannelData(0);
@@ -276,28 +298,35 @@
         staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.10, audioContext.currentTime);
 
         staticNode.connect(staticGain);
-        staticGain.connect(hpFilter); // Static passes through tone/formant filters organically
+        staticGain.connect(hpFilter); 
         staticNode.start();
     }
 
     async function fetchStations() {
         try {
-            statusLog.textContent = "Querying live global radio indexes...";
-            const response = await fetch(API_URL);
+            const chosenLang = langSelect.value;
+            let finalUrl = BASE_API_URL;
+            
+            // Append explicit API language filters to parameters if not set to 'all'
+            if (chosenLang !== "all") {
+                finalUrl += `&language=${chosenLang}`;
+            }
+
+            const response = await fetch(finalUrl);
             let rawStations = await response.json();
             
             const isHttpsMode = window.location.protocol === 'https:';
             if (isHttpsMode) {
                 stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
-                statusLog.textContent = `Indexed ${stations.length} secure DSP-ready streams.`;
+                statusLog.textContent = `Indexed ${stations.length} secure, ${chosenLang.toUpperCase()} streams.`;
             } else {
                 stations = rawStations;
-                statusLog.textContent = `Indexed ${stations.length} global DSP-ready streams.`;
+                statusLog.textContent = `Indexed ${stations.length} global, ${chosenLang.toUpperCase()} streams.`;
             }
-            if (stations.length === 0) throw new Error("No streams matching security protocol guidelines.");
+            if (stations.length === 0) throw new Error("No stations matched parameters.");
         } catch (error) {
             console.error(error);
-            statusLog.textContent = "Directory fetch failed. Retrying sync engine...";
+            statusLog.textContent = "Directory sync failure. Retrying indexing server...";
             setTimeout(fetchStations, 5000);
         }
     }
@@ -319,8 +348,6 @@
         for (let i = 0; i < POOL_SIZE; i++) {
             const audioEl = new Audio();
             audioEl.preload = "auto";
-            
-            // Critical CORS authentication parameter for graph extraction
             audioEl.crossOrigin = "anonymous"; 
             
             const audioObj = {
@@ -328,16 +355,13 @@
                 sourceNode: audioContext.createMediaElementSource(audioEl)
             };
 
-            // Intercept non-CORS configurations or dead packets, drop instantly, and swap out
             audioEl.addEventListener('error', () => {
                 if (isSweeping) {
                     assignRandomStation(audioObj);
                 }
             });
 
-            // Route audio element into the central filter matrix
             audioObj.sourceNode.connect(hpFilter);
-
             assignRandomStation(audioObj);
             audioPool.push(audioObj);
         }
@@ -353,7 +377,6 @@
             }
         }
 
-        // Scan pool for nodes that have buffered valid packets through cross-origin requirements
         const readyChannels = audioPool.filter(a => a.element.readyState >= 2 && !a.element.paused && !a.element.error);
 
         if (readyChannels.length > 0) {
@@ -365,7 +388,7 @@
             stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.element.stationData.countrycode || 'GLOBAL'}`;
         } else {
             stationNameDiv.textContent = "TUNING DIAL...";
-            stationInfoDiv.textContent = "SEARCHING FOR CORS STATIONS...";
+            stationInfoDiv.textContent = "FILTERING STREAMS...";
             activeAudio = null;
         }
 
@@ -373,7 +396,6 @@
     }
 
     startBtn.addEventListener('click', async () => {
-        // Enforce safe instantiation inside user-interaction callback window
         if (!audioContext) {
             initAudioEngine();
         }
@@ -394,7 +416,7 @@
             stationInfoDiv.textContent = "SYSTEM STANDBY";
         } else {
             if (stations.length === 0) {
-                statusLog.textContent = "Awaiting network handshake initialization...";
+                statusLog.textContent = "Awaiting directory sync connection...";
                 return;
             }
             
