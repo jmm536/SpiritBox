@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMF Magnetometer & Sonograph Tracker</title>
+    <title>Barometric Pressure Tracker & Sonograph</title>
     <style>
         :root {
             --bg-color: #121214;
             --panel-color: #1a1a1e;
-            --accent-color: #00ff66;
+            --accent-color: #00d2ff;
             --alert-color: #ff3333;
             --text-color: #e0e0e6;
         }
@@ -18,7 +18,7 @@
             padding: 15px;
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         .container {
@@ -47,7 +47,7 @@
             font-weight: bold;
         }
 
-        .status-active { color: var(--accent-color); background: rgba(0, 255, 102, 0.1); }
+        .status-active { color: var(--accent-color); background: rgba(0, 210, 255, 0.1); }
         .status-alert { color: var(--alert-color); background: rgba(255, 51, 51, 0.1); animation: pulse 1s infinite alternate; }
 
         @keyframes pulse {
@@ -74,27 +74,15 @@
         }
 
         .readout {
-            font-size: 2.5rem;
+            font-size: 2.8rem;
             font-weight: 700;
             font-family: monospace;
             text-align: center;
-            margin: 10px 0;
+            margin: 20px 0;
             color: #fff;
         }
 
-        .unit { font-size: 1rem; color: #888; font-weight: normal; }
-
-        .axes-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            text-align: center;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-
-        .axis { padding: 5px; background: #222226; border-radius: 4px; }
-        .axis span { display: block; color: #888; font-size: 0.75rem; }
+        .unit { font-size: 1.2rem; color: #888; font-weight: normal; }
 
         .controls label {
             display: block;
@@ -131,10 +119,10 @@
         }
 
         .btn-start { background-color: var(--accent-color); color: #000; }
-        .btn-start:hover { background-color: #00e65c; }
+        .btn-start:hover { background-color: #00bfe6; }
         .btn-stop { background-color: #3d3d45; color: #fff; }
         .btn-stop:hover { background-color: #4e4e58; }
-        .btn-export { background-color: #2196F3; color: #fff; grid-column: span 2; }
+        .btn-export { background-color: #4CAF50; color: #fff; grid-column: span 2; }
 
         canvas {
             width: 100%;
@@ -158,7 +146,7 @@
         }
 
         .log-entry {
-            padding: 2px 0;
+            padding: 4px 0;
             border-bottom: 1px solid #151518;
             display: flex;
             justify-content: space-between;
@@ -170,7 +158,7 @@
 
 <div class="container">
     <header>
-        <h1>EMF Real-Time Sonograph</h1>
+        <h1>Barometric Real-Time Sonograph</h1>
         <div id="statusBadge" class="status-badge">System Ready</div>
     </header>
 
@@ -178,50 +166,48 @@
 
     <div class="dashboard">
         <div class="panel">
-            <h3>Current Intensity</h3>
-            <div class="readout" id="magMagnitude">0.00 <span class="unit">µT</span></div>
-            <div class="axes-grid">
-                <div class="axis"><span id="valX">0.00</span><span>X (μT)</span></div>
-                <div class="axis"><span id="valY">0.00</span><span>Y (μT)</span></div>
-                <div class="axis"><span id="valZ">0.00</span><span>Z (μT)</span></div>
+            <h3>Atmospheric Pressure</h3>
+            <div class="readout" id="pressureReadout">0.00 <span class="unit">hPa</span></div>
+            <div style="text-align: center; color: #888; font-size: 0.85rem; font-family: monospace;" id="timeFeedback">
+                No active session
             </div>
         </div>
 
         <div class="panel controls">
-            <h3>Threshold Alerts</h3>
+            <h3>Variance Settings</h3>
             <label>
-                Tolerance Window ($\Delta$ µT):
-                <input type="number" id="toleranceInput" value="5.0" step="0.1" min="0.1">
+                Tolerance Limit ($\Delta$ hPa):
+                <input type="number" id="toleranceInput" value="0.15" step="0.01" min="0.01">
             </label>
             <label>
                 Duration Window (Seconds):
-                <input type="number" id="durationInput" value="3" step="1" min="1">
+                <input type="number" id="durationInput" value="5" step="1" min="1">
             </label>
             <div class="btn-group">
-                <button class="btn-start" id="startBtn">Start Sensor</button>
+                <button class="btn-start" id="startBtn">Start Barometer</button>
                 <button class="btn-stop" id="stopBtn" disabled>Stop</button>
-                <button class="btn-export" id="exportBtn" disabled>Export Data Log (.CSV)</button>
+                <button class="btn-export" id="exportBtn" disabled>Export CSV Log</button>
             </div>
         </div>
     </div>
 
     <div class="panel">
-        <h3>Live Activity Feed</h3>
+        <h3>System Activity Feed</h3>
         <div class="log-panel" id="logPanel">
-            <div style="color: #666;">Logs will appear here once monitoring begins...</div>
+            <div style="color: #666;">Logs will update dynamically with real timestamps upon initialization...</div>
         </div>
     </div>
 </div>
 
 <script>
-    // State variables
     let sensor = null;
     let isMonitoring = false;
-    let dataHistory = []; // Master structural data array
+    let dataHistory = []; 
+    let plotPoints = [];
+    const maxPlotPoints = 300;
     let audioCtx = null;
     let alertActive = false;
 
-    // UI Elements
     const canvas = document.getElementById('sonographCanvas');
     const ctx = canvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
@@ -232,7 +218,6 @@
     const statusBadge = document.getElementById('statusBadge');
     const logPanel = document.getElementById('logPanel');
 
-    // Setup canvas resolution mapping
     function resizeCanvas() {
         canvas.width = canvas.clientWidth * window.devicePixelRatio;
         canvas.height = canvas.clientHeight * window.devicePixelRatio;
@@ -240,11 +225,6 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // Visual Sonograph History Array for Plotting
-    let plotPoints = [];
-    const maxPlotPoints = 300;
-
-    // Initialize Web Audio for distinct alarm feedback
     function initAudio() {
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -255,42 +235,40 @@
         if (!audioCtx) return;
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // 880Hz alert tone
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(660, audioCtx.currentTime); 
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.15);
+        osc.stop(audioCtx.currentTime + 0.2);
     }
 
-    // Main Control Loop Setup
     startBtn.addEventListener('click', async () => {
         initAudio();
         
-        if (!('Magnetometer' in window)) {
-            updateStatus("API Unsupported: Requires local HTTPS or browser flag updates.", "status-alert");
-            alert("Magnetometer API is not supported on this browser or device architecture. If using Chrome, check chrome://flags/#enable-generic-sensor-extra-classes");
+        if (!('PressureSensor' in window)) {
+            updateStatus("API Unsupported", "status-alert");
+            alert("PressureSensor API is missing on this device/browser context. Check your HTTPS configuration or experimental flags.");
             return;
         }
 
         try {
-            // Request explicit permission status check if available
-            const permissionStatus = await navigator.permissions.query({ name: 'magnetometer' });
+            const permissionStatus = await navigator.permissions.query({ name: 'pressure' });
             if (permissionStatus.state === 'denied') {
-                alert("Permission to access the device magnetometer was explicitly denied.");
+                alert("Permission to access the barometric sensor was blocked.");
                 return;
             }
 
             if (!sensor) {
-                sensor = new Magnetometer({ frequency: 50 }); // Fetch samples at 50Hz framework structure
+                // Poll the barometer environment class at 10Hz
+                sensor = new PressureSensor({ frequency: 10 }); 
                 
                 sensor.addEventListener('reading', () => {
-                    handleSensorReading(sensor.x, sensor.y, sensor.z);
+                    handlePressureReading(sensor.pressure);
                 });
 
                 sensor.addEventListener('error', (event) => {
-                    console.error("Sensor Error:", event.error);
                     updateStatus(`Error: ${event.error.name}`, "status-alert");
                     stopMonitoring();
                 });
@@ -302,23 +280,18 @@
             stopBtn.disabled = false;
             exportBtn.disabled = false;
             updateStatus("Monitoring Active", "status-active");
-            logPanel.innerHTML = ""; // Clear initial screen notes
+            logPanel.innerHTML = ""; 
             animatePlot();
 
         } catch (err) {
-            console.error("Initialization Failed:", err);
             updateStatus("Initialization Error", "status-alert");
         }
     });
 
-    stopBtn.addEventListener('click', () => {
-        stopMonitoring();
-    });
+    stopBtn.addEventListener('click', () => { stopMonitoring(); });
 
     function stopMonitoring() {
-        if (sensor) {
-            sensor.stop();
-        }
+        if (sensor) sensor.stop();
         isMonitoring = false;
         startBtn.disabled = false;
         stopBtn.disabled = true;
@@ -330,67 +303,53 @@
         statusBadge.className = "status-badge " + className;
     }
 
-    // Process Incoming Sensor Vectors
-    function handleSensorReading(x, y, z) {
+    function handlePressureReading(pressureValue) {
         const now = Date.now();
-        // Calculate Total Magnetic Flux Field Magnitude: $B = \sqrt{x^2 + y^2 + z^2}$
-        const magnitude = Math.sqrt(x * x + y * y + z * z);
+        const timestampIso = new Date(now).toISOString();
 
-        // UI Text Element Output Updating Updates
-        document.getElementById('magMagnitude').innerHTML = `${magnitude.toFixed(2)} <span class="unit">µT</span>`;
-        document.getElementById('valX').textContent = x.toFixed(2);
-        document.getElementById('valY').textContent = y.toFixed(2);
-        document.getElementById('valZ').textContent = z.toFixed(2);
+        document.getElementById('pressureReadout').innerHTML = `${pressureValue.toFixed(2)} <span class="unit">hPa</span>`;
+        document.getElementById('timeFeedback').textContent = `Last update: ${new Date(now).toLocaleTimeString()}`;
 
-        // Append to Structured Data Array using full current timestamp strings
         const record = {
             epoch: now,
-            isoString: new Date(now).toISOString(),
-            x: x.toFixed(4),
-            y: y.toFixed(4),
-            z: z.toFixed(4),
-            magnitude: magnitude.toFixed(4),
+            isoString: timestampIso,
+            pressure: pressureValue.toFixed(4),
             alertTriggered: false
         };
 
         dataHistory.push(record);
-        
-        // Push onto internal visual array data loop for scrolling interface
-        plotPoints.push(magnitude);
+        plotPoints.push(pressureValue);
         if (plotPoints.length > maxPlotPoints) plotPoints.shift();
 
-        // Perform Sliding Window Variance Math Logic
-        evaluateAlertWindow(now, magnitude, record);
+        evaluateAlertWindow(now, pressureValue, record);
     }
 
-    // Sliding Window Variance Math Calculations
-    function evaluateAlertWindow(currentTime, currentMag, currentRecord) {
-        const durationSec = parseFloat(durationInput.value) || 3;
-        const tolerance = parseFloat(toleranceInput.value) || 5;
+    function evaluateAlertWindow(currentTime, currentPres, currentRecord) {
+        const durationSec = parseFloat(durationInput.value) || 5;
+        const tolerance = parseFloat(toleranceInput.value) || 0.15;
         const windowThresholdMs = durationSec * 1000;
 
-        // Scan backwards through historical frames safely to extract active timeframe window elements
-        let minVal = currentMag;
-        let maxVal = currentMag;
+        let minVal = currentPres;
+        let maxVal = currentPres;
 
+        // Trace backward into frame log array
         for (let i = dataHistory.length - 1; i >= 0; i--) {
-            if (currentTime - dataHistory[i].epoch > windowThresholdMs) {
-                break; // Left boundary reached outside calculation window scope
-            }
-            const magVal = parseFloat(dataHistory[i].magnitude);
-            if (magVal < minVal) minVal = magVal;
-            if (magVal > maxVal) maxVal = magVal;
+            if (currentTime - dataHistory[i].epoch > windowThresholdMs) break;
+            
+            const pVal = parseFloat(dataHistory[i].pressure);
+            if (pVal < minVal) minVal = pVal;
+            if (pVal > maxVal) maxVal = pVal;
         }
 
-        const variance = maxVal - minVal;
+        const delta = maxVal - minVal;
 
-        if (variance > tolerance) {
+        if (delta > tolerance) {
             currentRecord.alertTriggered = true;
             if (!alertActive) {
                 alertActive = true;
-                updateStatus("EMF SPIKE DETECTED", "status-alert");
+                updateStatus("PRESSURE ANOMALY DETECTED", "status-alert");
                 playAlertTone();
-                appendLogEntry(`[SPIKE] Delta: ${variance.toFixed(2)} µT over ${durationSec}s`, true);
+                appendLogEntry(`[SPIKE] Deviation: ${delta.toFixed(3)} hPa over ${durationSec}s`, true);
             }
         } else {
             if (alertActive) {
@@ -415,7 +374,6 @@
         logPanel.insertBefore(entry, logPanel.firstChild);
     }
 
-    // HTML5 Canvas Plot Rendering Frame Loop
     function animatePlot() {
         if (!isMonitoring) return;
 
@@ -423,7 +381,6 @@
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
 
-        // Draw internal background grid layout patterns
         ctx.strokeStyle = '#1c1c22';
         ctx.lineWidth = 1;
         for (let i = 0; i < h; i += h / 5) {
@@ -437,51 +394,44 @@
             ctx.beginPath();
             ctx.lineWidth = 3;
             
-            // Auto-scale vertical rendering viewport bounds depending on localized maximum data fields
-            const maxVal = Math.max(...plotPoints, 100); 
-            const minVal = Math.min(...plotPoints, 0);
+            const maxVal = Math.max(...plotPoints) + 0.05; 
+            const minVal = Math.min(...plotPoints) - 0.05;
             const range = (maxVal - minVal) || 1;
 
-            ctx.strokeStyle = alertActive ? '#ff3333' : '#00ff66';
+            ctx.strokeStyle = alertActive ? '#ff3333' : '#00d2ff';
 
             for (let i = 0; i < plotPoints.length; i++) {
                 const xPos = (i / (maxPlotPoints - 1)) * w;
-                // Invert coordinates for standard structural layout
                 const yPos = h - ((plotPoints[i] - minVal) / range) * h; 
 
-                if (i === 0) {
-                    ctx.moveTo(xPos, yPos);
-                } else {
-                    ctx.lineTo(xPos, yPos);
-                }
+                if (i === 0) ctx.moveTo(xPos, yPos);
+                else ctx.lineTo(xPos, yPos);
             }
             ctx.stroke();
 
-            // Fill visual track beneath trace line elements
             ctx.lineTo(w * (plotPoints.length - 1) / (maxPlotPoints - 1), h);
             ctx.lineTo(0, h);
-            ctx.fillStyle = alertActive ? 'rgba(255, 51, 51, 0.05)' : 'rgba(0, 255, 102, 0.05)';
+            ctx.fillStyle = alertActive ? 'rgba(255, 51, 51, 0.04)' : 'rgba(0, 210, 255, 0.04)';
             ctx.fill();
         }
 
         requestAnimationFrame(animatePlot);
     }
 
-    // Build Formatted Structural String Output for Raw CSV Delivery
     exportBtn.addEventListener('click', () => {
         if (dataHistory.length === 0) return;
 
         let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Timestamp (ISO),Epoch (ms),X (uT),Y (uT),Z (uT),Magnitude (uT),Alert Triggered\n";
+        csvContent += "Timestamp (ISO),Epoch (ms),Atmospheric Pressure (hPa),Threshold Breach\n";
 
         dataHistory.forEach(r => {
-            csvContent += `${r.isoString},${r.epoch},${r.x},${r.y},${r.z},${r.magnitude},${r.alertTriggered}\n`;
+            csvContent += `${r.isoString},${r.epoch},${r.pressure},${r.alertTriggered}\n`;
         });
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `emf_data_${Date.now()}.csv`);
+        link.setAttribute("download", `baro_data_${Date.now()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
