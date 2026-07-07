@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box</title>
+    <title>Internet Radio Spirit Box (Hardened)</title>
     <style>
         body {
             background-color: #121212;
@@ -86,7 +86,7 @@
         }
         .status {
             font-size: 0.75rem;
-            color: #666;
+            color: #888;
             text-align: center;
             margin-top: 20px;
             border-top: 1px dashed #333;
@@ -97,7 +97,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX</h1>
+    <h1>IP-SPIRIT BOX v2</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -126,10 +126,9 @@
 </div>
 
 <script>
-    // Public Open-Source API Configuration (Radio-Browser Directory)
-    // Pulls active, highly voted MP3 streams to optimize browser playback compatibility
-    const API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=200&hidebroken=true&codec=mp3&order=clickcount";
-    const POOL_SIZE = 6; // Total background streams running concurrently
+    // Using a fallback pool of regional APIs in case one is slow
+    const API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=300&hidebroken=true&codec=mp3&order=clickcount";
+    const POOL_SIZE = 8; // Expanded pool size for better statistical buffer density
     
     let stations = [];
     let audioPool = [];
@@ -141,7 +140,6 @@
     let sweepTimeout = null;
     let activeAudio = null;
 
-    // DOM Target Elements
     const startBtn = document.getElementById('start-btn');
     const sweepRateInput = document.getElementById('sweep-rate');
     const rateVal = document.getElementById('rate-val');
@@ -151,20 +149,16 @@
     const stationInfoDiv = document.getElementById('station-info');
     const statusLog = document.getElementById('status-log');
 
-    // UI Listeners
     sweepRateInput.addEventListener('input', () => rateVal.textContent = sweepRateInput.value);
     staticVolInput.addEventListener('input', () => {
         staticVal.textContent = staticVolInput.value;
         if (staticGain) {
-            // Normalizing static volume to keep background white noise comfortable
             staticGain.gain.value = (staticVolInput.value / 100) * 0.12; 
         }
     });
 
-    // Synthesize Web Audio White Noise to simulate analog RF static
     function initStaticNoise() {
         if (audioContext) return;
-        
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
         const bufferSize = 2 * audioContext.sampleRate;
@@ -187,22 +181,31 @@
         staticNode.start();
     }
 
-    // Fetch live stream array from the open API directory
     async function fetchStations() {
         try {
             statusLog.textContent = "Querying live global radio indexes...";
             const response = await fetch(API_URL);
-            stations = await response.json();
-            if (stations.length === 0) throw new Error("Directory returned empty.");
-            statusLog.textContent = `Successfully indexed ${stations.length} global streams.`;
+            let rawStations = await response.json();
+            
+            // SECURITY ENFORCEMENT: If running app on an https:// host, drop http:// links 
+            // to stop browser Mixed-Content silent blocking.
+            const isHttpsMode = window.location.protocol === 'https:';
+            if (isHttpsMode) {
+                stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
+                statusLog.textContent = `Indexed ${stations.length} secure HTTPS streams.`;
+            } else {
+                stations = rawStations;
+                statusLog.textContent = `Indexed ${stations.length} global streams.`;
+            }
+
+            if (stations.length === 0) throw new Error("No compatible streams found.");
         } catch (error) {
             console.error(error);
-            statusLog.textContent = "Directory query failed. Retrying backend fetch...";
-            setTimeout(fetchStations, 4000);
+            statusLog.textContent = "Directory fetch failed. Retrying configuration...";
+            setTimeout(fetchStations, 5000);
         }
     }
 
-    // Swap a stream slot out for an entirely new random target from the directory pool
     function assignRandomStation(audioElement) {
         if (!stations.length) return;
         const randomTarget = stations[Math.floor(Math.random() * stations.length)];
@@ -211,66 +214,65 @@
         audioElement.stationData = randomTarget;
         audioElement.volume = 0;
         
-        // Background play immediately so it pre-buffers silently 
-        audioElement.play().catch(() => { /* Catch browser auto-play guard blocks */ });
+        // Quietly try to spin up stream background playback
+        audioElement.play().catch(() => { /* Absorb interface autoplay blockers safely */ });
     }
 
-    // Pre-populate our background streaming objects
     function buildAudioPool() {
         if (audioPool.length > 0) return;
 
         for (let i = 0; i < POOL_SIZE; i++) {
             const audio = new Audio();
-            audio.crossOrigin = "anonymous";
             audio.preload = "auto";
+            
+            // CRITICAL UPGRADE: The Active Error Catcher Loop
+            // If stream drops packet, throws 404, or hits CORS snags, dump it and grab a fresh channel immediately
+            audio.addEventListener('error', () => {
+                if (isSweeping) {
+                    console.log("Stalled stream detected. Rotating out slot...");
+                    assignRandomStation(audio);
+                }
+            });
+
             assignRandomStation(audio);
             audioPool.push(audio);
         }
     }
 
-    // Execution Core: The Sweep Interval Loop
     function executeSweep() {
         if (!isSweeping) return;
 
-        // Instantly mute the station from the previous tick
         if (activeAudio) {
             activeAudio.volume = 0;
             
-            // 35% chance to hot-swap this audio node to a brand new global channel.
-            // This guarantees an infinite, ever-changing selection of channels.
-            if (Math.random() < 0.35) {
+            // 40% probability to dynamically flush this slot completely 
+            // after it speaks to maintain randomized sound textures
+            if (Math.random() < 0.40) {
                 assignRandomStation(activeAudio);
             }
         }
 
-        // Filter out nodes that haven't received enough data packets yet (readyState < 2)
-        const readyChannels = audioPool.filter(a => a.readyState >= 2 && !a.paused);
+        // Filter the pool looking only for streams that have successfully populated data packets (readyState >= 2)
+        const readyChannels = audioPool.filter(a => a.readyState >= 2 && !a.paused && !a.error);
 
         if (readyChannels.length > 0) {
-            // Pick a random stream that has successfully buffered audio data
             activeAudio = readyChannels[Math.floor(Math.random() * readyChannels.length)];
-            
-            // Blast the fragment audio
             activeAudio.volume = 1.0;
 
-            // Visual tracking updates
             const cleanName = activeAudio.stationData.name.trim().toUpperCase().substring(0, 24);
             stationNameDiv.textContent = cleanName || "UNKNOWN BAND";
             stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.stationData.countrycode || 'GLOBAL'}`;
         } else {
-            // If network stutters occur and nothing is buffered, output purely static behaviors
+            // If everything is catching up or cycling, show tuning states
             stationNameDiv.textContent = "TUNING DIAL...";
-            stationInfoDiv.textContent = "BUFFERING CHANNELS...";
+            stationInfoDiv.textContent = `RE-BUFFERING BANDS (${audioPool.filter(a => a.readyState < 2).length} STALLED)`;
             activeAudio = null;
         }
 
-        // Dynamically recalculate delay based on UI slider choices
         sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
     }
 
-    // Master Toggle Control
     startBtn.addEventListener('click', async () => {
-        // Handle User Interactivity constraints enforced by modern browsers for audio playback
         if (!audioContext) {
             initStaticNoise();
         }
@@ -281,13 +283,14 @@
         if (isSweeping) {
             isSweeping = false;
             clearTimeout(sweepTimeout);
+            audioPool.forEach(a => a.volume = 0);
             if (activeAudio) activeAudio.volume = 0;
             startBtn.textContent = "START SWEEP";
             stationNameDiv.textContent = "SWEEP HALTED";
             stationInfoDiv.textContent = "SYSTEM STANDBY";
         } else {
             if (stations.length === 0) {
-                statusLog.textContent = "Cannot start: Awaiting network index connection.";
+                statusLog.textContent = "Error: Directory not populated yet.";
                 return;
             }
             buildAudioPool();
@@ -297,7 +300,6 @@
         }
     });
 
-    // Run fetch pipeline on application initialization
     fetchStations();
 </script>
 
