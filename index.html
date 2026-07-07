@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Perfect Scope Edition)</title>
+    <title>Internet Radio Spirit Box (Decoder Edition)</title>
     <style>
         body {
             background-color: #121212;
@@ -31,21 +31,21 @@
             text-align: center;
             margin-top: 0;
             text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
-            font-size: 1.6rem;
+            font-size: 1.4rem;
             letter-spacing: 2px;
         }
         .display {
             background-color: #000;
             border: 1px solid #00ff66;
             padding: 15px;
-            height: 90px;
+            height: 75px;
             margin-bottom: 10px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             overflow: hidden;
             border-radius: 4px;
         }
@@ -54,38 +54,59 @@
             border: 1px solid #00ff66;
             border-radius: 4px;
             width: 100%;
-            height: 120px;
-            margin-bottom: 20px;
+            height: 90px;
+            margin-bottom: 10px;
             box-sizing: border-box;
             overflow: hidden;
-            position: relative;
         }
         canvas {
             width: 100%;
             height: 100%;
             display: block;
         }
+        /* New Decoder Terminal Styles */
+        .terminal-container {
+            background-color: #050505;
+            border: 1px solid #00ff66;
+            border-radius: 4px;
+            height: 110px;
+            padding: 10px;
+            margin-bottom: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column-reverse; /* Keeps freshest words scrolling at bottom */
+        }
+        .terminal-line {
+            font-size: 0.85rem;
+            line-height: 1.3;
+            color: #00ff66;
+            text-shadow: 0 0 4px rgba(0, 255, 102, 0.3);
+        }
+        .terminal-line.interim {
+            color: #00aa44;
+        }
         .controls {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
         }
         .control-group {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
         }
         .control-row {
             display: flex;
             justify-content: space-between;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
         button {
             background-color: #00ff66;
             color: #000;
             border: none;
-            padding: 15px;
-            font-size: 1.3rem;
+            padding: 12px;
+            font-size: 1.2rem;
             font-weight: bold;
             font-family: inherit;
             cursor: pointer;
@@ -97,6 +118,10 @@
             background-color: #00cc52;
             box-shadow: 0 0 12px rgba(0, 255, 102, 0.6);
         }
+        button.active-decoding {
+            background-color: #ff3333;
+            color: #fff;
+        }
         input[type="range"], select {
             width: 100%;
             accent-color: #00ff66;
@@ -106,9 +131,9 @@
             background-color: #000;
             color: #00ff66;
             border: 1px solid #00ff66;
-            padding: 10px;
+            padding: 8px;
             font-family: inherit;
-            font-size: 1rem;
+            font-size: 0.95rem;
             border-radius: 4px;
             outline: none;
         }
@@ -116,7 +141,7 @@
             font-size: 0.75rem;
             color: #888;
             text-align: center;
-            margin-top: 20px;
+            margin-top: 15px;
             border-top: 1px dashed #333;
             padding-top: 10px;
         }
@@ -125,19 +150,24 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v3.6 // ZOOM SCOPE</h1>
+    <h1>IP-SPIRIT BOX v3.7 // DECODER</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
-        <div id="station-info" style="font-size: 0.8rem; color: #00aa44; margin-top: 8px;">PRESS START TO WORK BANDS</div>
+        <div id="station-info" style="font-size: 0.8rem; color: #00aa44; margin-top: 4px;">PRESS START TO WORK BANDS</div>
     </div>
 
     <div class="scope-container">
         <canvas id="scope"></canvas>
     </div>
 
+    <div class="terminal-container" id="terminal-log">
+        <div class="terminal-line" id="interim-text-line"></div>
+    </div>
+
     <div class="controls">
         <button id="start-btn">START SWEEP</button>
+        <button id="decoder-btn">ENABLE TEXT DECODER</button>
         
         <div class="control-group">
             <div class="control-row">
@@ -201,7 +231,12 @@
     let activeAudio = null;
     let isChannelAudioVoicing = false;
 
+    // Speech Decoder Variables
+    let speechRecognitionEngine = null;
+    let isDecoderEnabled = false;
+
     const startBtn = document.getElementById('start-btn');
+    const decoderBtn = document.getElementById('decoder-btn');
     const langSelect = document.getElementById('lang-select');
     const sweepRateInput = document.getElementById('sweep-rate');
     const rateVal = document.getElementById('rate-val');
@@ -214,11 +249,12 @@
     const stationNameDiv = document.getElementById('station-name');
     const stationInfoDiv = document.getElementById('station-info');
     const statusLog = document.getElementById('status-log');
+    const terminalLog = document.getElementById('terminal-log');
+    const interimTextLine = document.getElementById('interim-text-line');
     
     const canvas = document.getElementById('scope');
     const canvasCtx = canvas.getContext('2d');
 
-    // FIX 1: Pixel-Perfect Client Rect Sizing
     function resizeCanvas() {
         const rect = canvas.parentElement.getBoundingClientRect();
         canvas.width = rect.width;
@@ -265,7 +301,6 @@
         lpFilter.type = "lowpass";
         lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
 
-        // FIX 2: Dropped fftSize to 256 to stop wave repetitions across the panel width
         analyserNode = audioContext.createAnalyser();
         analyserNode.fftSize = 256; 
         audioDataArray = new Uint8Array(analyserNode.frequencyBinCount);
@@ -295,6 +330,66 @@
         renderScopeLoop();
     }
 
+    // Initialize Web Speech Engine
+    function initSpeechEngine() {
+        const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechClass) {
+            logToTerminal("SYSTEM ERROR: Speech API not supported in this browser.");
+            return;
+        }
+
+        speechRecognitionEngine = new SpeechClass();
+        speechRecognitionEngine.continuous = true;
+        speechRecognitionEngine.interimResults = true;
+        // Forces English alignment matching target configuration parameters
+        speechRecognitionEngine.lang = 'en-US'; 
+
+        speechRecognitionEngine.onresult = (event) => {
+            let interimTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const phrase = event.results[i][0].transcript.trim().toUpperCase();
+                if (event.results[i].isFinal) {
+                    if(phrase.length > 0) {
+                        logToTerminal(`> ${phrase}`);
+                    }
+                } else {
+                    interimTranscript += ' ' + phrase;
+                }
+            }
+            interimTextLine.textContent = interimTranscript ? `>> ${interimTranscript}` : '';
+        };
+
+        speechRecognitionEngine.onerror = (event) => {
+            console.error("Speech Engine Warning: ", event.error);
+            // Auto recovers standard silence drop-offs smoothly
+            if (event.error === 'no-speech' && isDecoderEnabled) {
+                restartSpeechEngineSafely();
+            }
+        };
+
+        speechRecognitionEngine.onend = () => {
+            if (isDecoderEnabled) {
+                restartSpeechEngineSafely();
+            }
+        };
+    }
+
+    function restartSpeechEngineSafely() {
+        try { speechRecognitionEngine.stop(); } catch(e){}
+        setTimeout(() => {
+            if (isDecoderEnabled) speechRecognitionEngine.start();
+        }, 300);
+    }
+
+    function logToTerminal(text) {
+        const newLine = document.createElement('div');
+        newLine.className = "terminal-line";
+        newLine.textContent = text;
+        // Appends lines right above the fluid input layout block
+        terminalLog.insertBefore(newLine, interimTextLine.nextSibling);
+    }
+
     function renderScopeLoop() {
         requestAnimationFrame(renderScopeLoop);
         
@@ -317,25 +412,17 @@
         let x = 0;
 
         for (let i = 0; i < bufferLength; i++) {
-            // Normalize raw static byte data (-1.0 to 1.0 centered)
             let v = audioDataArray ? (audioDataArray[i] / 128.0) - 1.0 : 0.0;
 
-            // FIX 3: Procedural Gaussian Arch-Envelope to focus voice bursts into a single central spike
             if (isSweeping && isChannelAudioVoicing) {
                 let norm = i / (bufferLength - 1);
-                let centerEnvelope = Math.sin(norm * Math.PI); // Perfect arch peaking at 1.0 in center
-                
-                // Form a single massive, non-repeating complex vocal wave pulse
+                let centerEnvelope = Math.sin(norm * Math.PI); 
                 let organicWave = Math.sin(norm * 2.0 + Date.now() * 0.03) * 0.6;
                 let microJitter = (Math.random() * 0.4 - 0.2);
-                
                 v += centerEnvelope * (organicWave + microJitter);
             }
 
-            // Clamp sample safely inside the container borders to preserve perfect box tracking
             v = Math.max(-0.92, Math.min(0.92, v));
-
-            // Map layout calculation out to canvas coordinates
             let y = (height / 2) + (v * (height / 2));
 
             if (i === 0) {
@@ -343,16 +430,13 @@
             } else {
                 canvasCtx.lineTo(x, y);
             }
-
             x += sliceWidth;
         }
 
-        // Draw clean centered beam if box is idle
         if (!isSweeping && (!audioContext || audioContext.state !== 'running')) {
             canvasCtx.moveTo(0, height / 2);
             canvasCtx.lineTo(width, height / 2);
         }
-
         canvasCtx.stroke();
     }
 
@@ -439,6 +523,34 @@
         sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
     }
 
+    // Toggle Decoder Trigger
+    decoderBtn.addEventListener('click', () => {
+        if (!speechRecognitionEngine) {
+            initSpeechEngine();
+        }
+
+        if (!speechRecognitionEngine) return;
+
+        if (isDecoderEnabled) {
+            isDecoderEnabled = false;
+            speechRecognitionEngine.stop();
+            decoderBtn.textContent = "ENABLE TEXT DECODER";
+            decoderBtn.classList.remove('active-decoding');
+            interimTextLine.textContent = '';
+            logToTerminal("DECODER DISENGAGED.");
+        } else {
+            isDecoderEnabled = true;
+            decoderBtn.textContent = "DISENGAGE DECODER";
+            decoderBtn.classList.add('active-decoding');
+            logToTerminal("INITIALIZING MICROPHONE CAPTURE...");
+            try {
+                speechRecognitionEngine.start();
+            } catch(e) {
+                console.log(e);
+            }
+        }
+    });
+
     startBtn.addEventListener('click', async () => {
         if (!audioContext) {
             initAudioEngine();
@@ -449,7 +561,7 @@
             isChannelAudioVoicing = false;
             clearTimeout(sweepTimeout);
             audioPool.forEach(a => a.element.volume = 0);
-            if (activeAudio) activeAudio.element.volume = 0;
+            if (activeAudio) activeAudio.volume = 0;
             
             if (audioContext && audioContext.state === 'running') {
                 await audioContext.suspend();
