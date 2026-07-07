@@ -201,4 +201,219 @@
     const staticVal = document.getElementById('static-val');
     const stationNameDiv = document.getElementById('station-name');
     const stationInfoDiv = document.getElementById('station-info');
-    const statusLog = document.getElementById('status-log
+    const statusLog = document.getElementById('status-log');
+
+    sweepRateInput.addEventListener('input', () => rateVal.textContent = sweepRateInput.value);
+    
+    bassInput.addEventListener('input', () => {
+        bassVal.textContent = bassInput.value;
+        if (hpFilter) hpFilter.frequency.setValueAtTime(parseFloat(bassInput.value), audioContext.currentTime);
+    });
+
+    trebleInput.addEventListener('input', () => {
+        trebleVal.textContent = (trebleInput.value / 1000).toFixed(1);
+        if (lpFilter) lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
+    });
+
+    staticVolInput.addEventListener('input', () => {
+        staticVal.textContent = staticVolInput.value;
+        if (staticGain) staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.15, audioContext.currentTime);
+    });
+
+    formantInput.addEventListener('input', () => {
+        const val = parseInt(formantInput.value);
+        if (val < 35) formantVal.textContent = "Deep (Ooo)";
+        else if (val > 65) formantVal.textContent = "Bright (Eee)";
+        else formantVal.textContent = "Neutral";
+        updateFormantFrequencies(val);
+    });
+
+    langSelect.addEventListener('change', async () => {
+        statusLog.textContent = "Reloading station directory filters...";
+        await fetchStations();
+        if (isSweeping && audioPool.length > 0) {
+            audioPool.forEach(audioObj => assignRandomStation(audioObj));
+        }
+    });
+
+    function updateFormantFrequencies(sliderValue) {
+        if (!formantFilterL || !formantFilterH) return;
+        const pct = sliderValue / 100;
+        const lowF = 350 + (pct * 450);    
+        const highF = 900 + (pct * 1900);  
+        formantFilterL.frequency.setValueAtTime(lowF, audioContext.currentTime);
+        formantFilterH.frequency.setValueAtTime(highF, audioContext.currentTime);
+    }
+
+    function initAudioEngine() {
+        if (audioContext) return;
+        
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        hpFilter = audioContext.createBiquadFilter();
+        hpFilter.type = "highpass";
+        hpFilter.frequency.setValueAtTime(parseFloat(bassInput.value), audioContext.currentTime);
+
+        lpFilter = audioContext.createBiquadFilter();
+        lpFilter.type = "lowpass";
+        lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
+
+        formantFilterL = audioContext.createBiquadFilter();
+        formantFilterL.type = "peaking";
+        formantFilterL.Q.setValueAtTime(8.0, audioContext.currentTime);
+        formantFilterL.gain.setValueAtTime(15, audioContext.currentTime);
+
+        formantFilterH = audioContext.createBiquadFilter();
+        formantFilterH.type = "peaking";
+        formantFilterH.Q.setValueAtTime(8.0, audioContext.currentTime);
+        formantFilterH.gain.setValueAtTime(15, audioContext.currentTime);
+
+        updateFormantFrequencies(parseInt(formantInput.value));
+
+        // Connect the processing tree for the white noise generator
+        hpFilter.connect(lpFilter);
+        lpFilter.connect(formantFilterL);
+        formantFilterL.connect(formantFilterH);
+        formantFilterH.connect(audioContext.destination);
+
+        const bufferSize = 2 * audioContext.sampleRate;
+        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+        }
+
+        staticNode = audioContext.createBufferSource();
+        staticNode.buffer = noiseBuffer;
+        staticNode.loop = true;
+
+        staticGain = audioContext.createGain();
+        staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.15, audioContext.currentTime);
+
+        staticNode.connect(staticGain);
+        staticGain.connect(hpFilter); 
+        staticNode.start();
+    }
+
+    async function fetchStations() {
+        try {
+            const chosenLang = langSelect.value;
+            let finalUrl = BASE_API_URL;
+            if (chosenLang !== "all") finalUrl += `&language=${chosenLang}`;
+
+            const response = await fetch(finalUrl);
+            let rawStations = await response.json();
+            
+            const isHttpsMode = window.location.protocol === 'https:';
+            if (isHttpsMode) {
+                stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
+            } else {
+                stations = rawStations;
+            }
+            statusLog.textContent = `Indexed ${stations.length} secure, online stations.`;
+            if (stations.length === 0) throw new Error("No channels found.");
+        } catch (error) {
+            console.error(error);
+            statusLog.textContent = "Directory sync failure. Retrying...";
+            setTimeout(fetchStations, 5000);
+        }
+    }
+
+    function assignRandomStation(audioObj) {
+        if (!stations.length) return;
+        const randomTarget = stations[Math.floor(Math.random() * stations.length)];
+        
+        audioObj.element.src = randomTarget.url_resolved || randomTarget.url;
+        audioObj.element.stationData = randomTarget;
+        audioObj.element.volume = 0;
+        
+        audioObj.element.play().catch(() => {});
+    }
+
+    function buildAudioPool() {
+        if (audioPool.length > 0) return;
+
+        for (let i = 0; i < POOL_SIZE; i++) {
+            const audioEl = new Audio();
+            audioEl.preload = "auto";
+            
+            // REMOVED: Strict crossOrigin tag to bypass the CORS silent mute trap completely
+            
+            const audioObj = {
+                element: audioEl
+            };
+
+            audioEl.addEventListener('error', () => {
+                if (isSweeping) assignRandomStation(audioObj);
+            });
+
+            assignRandomStation(audioObj);
+            audioPool.push(audioObj);
+        }
+    }
+
+    function executeSweep() {
+        if (!isSweeping) return;
+
+        if (activeAudio) {
+            activeAudio.element.volume = 0;
+            if (Math.random() < 0.50) {
+                assignRandomStation(activeAudio);
+            }
+        }
+
+        // Blind pick across the background elements
+        activeAudio = audioPool[Math.floor(Math.random() * audioPool.length)];
+
+        if (activeAudio.element.readyState >= 2 && !activeAudio.element.error && !activeAudio.element.paused) {
+            activeAudio.element.volume = 1.0; // Restored loud and clear playback directly to speakers
+
+            const cleanName = activeAudio.element.stationData.name.trim().toUpperCase().substring(0, 24);
+            stationNameDiv.textContent = cleanName || "UNKNOWN SOURCE";
+            stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.element.stationData.countrycode || 'GLOBAL'}`;
+        } else {
+            stationNameDiv.textContent = "--- DEAD AIR ---";
+            stationInfoDiv.textContent = `TUNING RF INTERSTICES...`;
+        }
+
+        sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
+    }
+
+    startBtn.addEventListener('click', async () => {
+        if (!audioContext) {
+            initAudioEngine();
+        }
+        
+        if (isSweeping) {
+            isSweeping = false;
+            clearTimeout(sweepTimeout);
+            audioPool.forEach(a => a.element.volume = 0);
+            if (activeAudio) activeAudio.element.volume = 0;
+            
+            if (audioContext && audioContext.state === 'running') {
+                await audioContext.suspend();
+            }
+            
+            startBtn.textContent = "START SWEEP";
+            stationNameDiv.textContent = "SWEEP HALTED";
+            stationInfoDiv.textContent = "SYSTEM STANDBY";
+        } else {
+            if (stations.length === 0) {
+                statusLog.textContent = "Awaiting directory sync connection...";
+                return;
+            }
+            if (audioContext && audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            buildAudioPool();
+            isSweeping = true;
+            startBtn.textContent = "STOP SWEEP";
+            executeSweep();
+        }
+    });
+
+    fetchStations();
+</script>
+
+</body>
+</html>
