@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barometric Pressure Tracker & Sonograph</title>
+    <title>Absolute Magnetic Orientation Sonograph</title>
     <style>
         :root {
-            --bg-color: #121214;
-            --panel-color: #1a1a1e;
-            --accent-color: #00d2ff;
+            --bg-color: #111113;
+            --panel-color: #17171c;
+            --accent-color: #ff9900;
             --alert-color: #ff3333;
-            --text-color: #e0e0e6;
+            --text-color: #e2e2e8;
         }
 
         body {
@@ -33,8 +33,8 @@
 
         h1 {
             margin: 0 0 5px 0;
-            font-size: 1.5rem;
-            letter-spacing: 1px;
+            font-size: 1.4rem;
+            letter-spacing: 0.5px;
             color: #fff;
         }
 
@@ -43,11 +43,11 @@
             padding: 4px 12px;
             border-radius: 12px;
             font-size: 0.85rem;
-            background: #2a2a30;
+            background: #25252b;
             font-weight: bold;
         }
 
-        .status-active { color: var(--accent-color); background: rgba(0, 210, 255, 0.1); }
+        .status-active { color: var(--accent-color); background: rgba(255, 153, 0, 0.1); }
         .status-alert { color: var(--alert-color); background: rgba(255, 51, 51, 0.1); animation: pulse 1s infinite alternate; }
 
         @keyframes pulse {
@@ -68,21 +68,33 @@
 
         .panel {
             background-color: var(--panel-color);
-            border: 1px solid #2d2d34;
+            border: 1px solid #26262e;
             border-radius: 8px;
             padding: 15px;
         }
 
         .readout {
-            font-size: 2.8rem;
+            font-size: 2.6rem;
             font-weight: 700;
             font-family: monospace;
             text-align: center;
-            margin: 20px 0;
+            margin: 15px 0;
             color: #fff;
         }
 
-        .unit { font-size: 1.2rem; color: #888; font-weight: normal; }
+        .unit { font-size: 1.1rem; color: #888; font-weight: normal; }
+
+        .axes-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            text-align: center;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        .axis { padding: 6px; background: #1f1f26; border-radius: 4px; }
+        .axis span { display: block; color: #888; font-size: 0.75rem; }
 
         .controls label {
             display: block;
@@ -93,8 +105,8 @@
         .controls input {
             width: 100%;
             padding: 8px;
-            background: #222226;
-            border: 1px solid #3d3d45;
+            background: #1f1f26;
+            border: 1px solid #363642;
             border-radius: 4px;
             color: #fff;
             margin-top: 4px;
@@ -119,35 +131,35 @@
         }
 
         .btn-start { background-color: var(--accent-color); color: #000; }
-        .btn-start:hover { background-color: #00bfe6; }
-        .btn-stop { background-color: #3d3d45; color: #fff; }
-        .btn-stop:hover { background-color: #4e4e58; }
-        .btn-export { background-color: #4CAF50; color: #fff; grid-column: span 2; }
+        .btn-start:hover { background-color: #ffaa22; }
+        .btn-stop { background-color: #2c2c35; color: #fff; }
+        .btn-stop:hover { background-color: #3a3a46; }
+        .btn-export { background-color: #2196F3; color: #fff; grid-column: span 2; }
 
         canvas {
             width: 100%;
             height: 220px;
-            background-color: #0a0a0c;
+            background-color: #070709;
             border-radius: 8px;
-            border: 1px solid #2d2d34;
+            border: 1px solid #26262e;
             display: block;
             margin-bottom: 15px;
         }
 
         .log-panel {
-            max-height: 150px;
+            max-height: 140px;
             overflow-y: auto;
             font-family: monospace;
             font-size: 0.8rem;
-            background: #0a0a0c;
+            background: #070709;
             padding: 10px;
             border-radius: 4px;
-            border: 1px solid #2d2d34;
+            border: 1px solid #26262e;
         }
 
         .log-entry {
-            padding: 4px 0;
-            border-bottom: 1px solid #151518;
+            padding: 3px 0;
+            border-bottom: 1px solid #14141a;
             display: flex;
             justify-content: space-between;
         }
@@ -158,49 +170,49 @@
 
 <div class="container">
     <header>
-        <h1>Barometric Real-Time Sonograph</h1>
-        <div id="statusBadge" class="status-badge">System Ready</div>
+        <h1>Absolute Geo-Magnetic Compass Tracker</h1>
+        <div id="statusBadge" class="status-badge">System Initialized</div>
     </header>
 
     <canvas id="sonographCanvas"></canvas>
 
     <div class="dashboard">
         <div class="panel">
-            <h3>Atmospheric Pressure</h3>
-            <div class="readout" id="pressureReadout">0.00 <span class="unit">hPa</span></div>
-            <div style="text-align: center; color: #888; font-size: 0.85rem; font-family: monospace;" id="timeFeedback">
-                No active session
+            <h3>Magnetic Heading</h3>
+            <div class="readout" id="headingReadout">0.00 <span class="unit">° Z (α)</span></div>
+            <div class="axes-grid">
+                <div class="axis"><span id="valBeta">0.00°</span><span>Pitch (β)</span></div>
+                <div class="axis"><span id="valGamma">0.00°</span><span>Roll (γ)</span></div>
             </div>
         </div>
 
         <div class="panel controls">
-            <h3>Variance Settings</h3>
+            <h3>Fluctuation Alert</h3>
             <label>
-                Tolerance Limit ($\Delta$ hPa):
-                <input type="number" id="toleranceInput" value="0.15" step="0.01" min="0.01">
+                Tolerance Window ($\Delta$ Degrees):
+                <input type="number" id="toleranceInput" value="3.0" step="0.1" min="0.1">
             </label>
             <label>
                 Duration Window (Seconds):
-                <input type="number" id="durationInput" value="5" step="1" min="1">
+                <input type="number" id="durationInput" value="4" step="1" min="1">
             </label>
             <div class="btn-group">
-                <button class="btn-start" id="startBtn">Start Barometer</button>
-                <button class="btn-stop" id="stopBtn" disabled>Stop</button>
-                <button class="btn-export" id="exportBtn" disabled>Export CSV Log</button>
+                <button class="btn-start" id="startBtn">Connect Stream</button>
+                <button class="btn-stop" id="stopBtn" disabled>Disconnect</button>
+                <button class="btn-export" id="exportBtn" disabled>Export Time Log (.CSV)</button>
             </div>
         </div>
     </div>
 
     <div class="panel">
-        <h3>System Activity Feed</h3>
+        <h3>Live Event Stream</h3>
         <div class="log-panel" id="logPanel">
-            <div style="color: #666;">Logs will update dynamically with real timestamps upon initialization...</div>
+            <div style="color: #666;">Waiting for hardware calibration activation sequence...</div>
         </div>
     </div>
 </div>
 
 <script>
-    let sensor = null;
     let isMonitoring = false;
     let dataHistory = []; 
     let plotPoints = [];
@@ -235,110 +247,120 @@
         if (!audioCtx) return;
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(660, audioCtx.currentTime); 
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5 note 
         gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.2);
+        osc.stop(audioCtx.currentTime + 0.15);
     }
 
     startBtn.addEventListener('click', async () => {
         initAudio();
         
-        if (!('PressureSensor' in window)) {
-            updateStatus("API Unsupported", "status-alert");
-            alert("PressureSensor API is missing on this device/browser context. Check your HTTPS configuration or experimental flags.");
+        // Confirm fallback interface availability
+        if (!('ondeviceorientationabsolute' in window) && !('ondeviceorientation' in window)) {
+            updateStatus("APIs Blocked/Missing", "status-alert");
+            alert("This device context does not support Web Orientation interface tracking loops.");
             return;
         }
 
         try {
-            const permissionStatus = await navigator.permissions.query({ name: 'pressure' });
-            if (permissionStatus.state === 'denied') {
-                alert("Permission to access the barometric sensor was blocked.");
-                return;
+            // Standardizing cross-browser modern security permission requests
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                const response = await DeviceOrientationEvent.requestPermission();
+                if (response !== 'granted') {
+                    alert("Hardware telemetry streaming access was explicitly denied.");
+                    return;
+                }
             }
 
-            if (!sensor) {
-                // Poll the barometer environment class at 10Hz
-                sensor = new PressureSensor({ frequency: 10 }); 
-                
-                sensor.addEventListener('reading', () => {
-                    handlePressureReading(sensor.pressure);
-                });
-
-                sensor.addEventListener('error', (event) => {
-                    updateStatus(`Error: ${event.error.name}`, "status-alert");
-                    stopMonitoring();
-                });
+            // Bind to the absolute hardware event pipeline (forces magnetometer stream usage)
+            if ('ondeviceorientationabsolute' in window) {
+                window.addEventListener('deviceorientationabsolute', handleOrientationReading, true);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientationReading, true);
             }
 
-            sensor.start();
             isMonitoring = true;
             startBtn.disabled = true;
             stopBtn.disabled = false;
             exportBtn.disabled = false;
-            updateStatus("Monitoring Active", "status-active");
+            updateStatus("Streaming Absolute Data", "status-active");
             logPanel.innerHTML = ""; 
             animatePlot();
 
         } catch (err) {
-            updateStatus("Initialization Error", "status-alert");
+            console.error(err);
+            updateStatus("Stream Failure", "status-alert");
         }
     });
 
-    stopBtn.addEventListener('click', () => { stopMonitoring(); });
-
-    function stopMonitoring() {
-        if (sensor) sensor.stop();
+    stopBtn.addEventListener('click', () => {
+        if ('ondeviceorientationabsolute' in window) {
+            window.removeEventListener('deviceorientationabsolute', handleOrientationReading, true);
+        } else {
+            window.removeEventListener('deviceorientation', handleOrientationReading, true);
+        }
         isMonitoring = false;
         startBtn.disabled = false;
         stopBtn.disabled = true;
-        updateStatus("Monitoring Stopped", "");
-    }
+        updateStatus("Stream Paused", "");
+    } );
 
     function updateStatus(text, className) {
         statusBadge.textContent = text;
         statusBadge.className = "status-badge " + className;
     }
 
-    function handlePressureReading(pressureValue) {
-        const now = Date.now();
-        const timestampIso = new Date(now).toISOString();
+    function handleOrientationReading(e) {
+        if (!isMonitoring) return;
 
-        document.getElementById('pressureReadout').innerHTML = `${pressureValue.toFixed(2)} <span class="unit">hPa</span>`;
-        document.getElementById('timeFeedback').textContent = `Last update: ${new Date(now).toLocaleTimeString()}`;
+        const now = Date.now();
+        // Alpha represents vector rotation around the physical device Z-axis [0 to 360 degrees)
+        const alpha = e.alpha !== null ? e.alpha : 0;
+        const beta = e.beta !== null ? e.beta : 0;
+        const gamma = e.gamma !== null ? e.gamma : 0;
+
+        document.getElementById('headingReadout').innerHTML = `${alpha.toFixed(2)}<span class="unit">°</span>`;
+        document.getElementById('valBeta').textContent = `${beta.toFixed(1)}°`;
+        document.getElementById('valGamma').textContent = `${gamma.toFixed(1)}°`;
 
         const record = {
             epoch: now,
-            isoString: timestampIso,
-            pressure: pressureValue.toFixed(4),
+            isoString: new Date(now).toISOString(),
+            alpha: alpha.toFixed(4),
+            beta: beta.toFixed(4),
+            gamma: gamma.toFixed(4),
             alertTriggered: false
         };
 
         dataHistory.push(record);
-        plotPoints.push(pressureValue);
+        plotPoints.push(alpha);
         if (plotPoints.length > maxPlotPoints) plotPoints.shift();
 
-        evaluateAlertWindow(now, pressureValue, record);
+        evaluateAlertWindow(now, alpha, record);
     }
 
-    function evaluateAlertWindow(currentTime, currentPres, currentRecord) {
-        const durationSec = parseFloat(durationInput.value) || 5;
-        const tolerance = parseFloat(toleranceInput.value) || 0.15;
+    function evaluateAlertWindow(currentTime, currentAlpha, currentRecord) {
+        const durationSec = parseFloat(durationInput.value) || 4;
+        const tolerance = parseFloat(toleranceInput.value) || 3;
         const windowThresholdMs = durationSec * 1000;
 
-        let minVal = currentPres;
-        let maxVal = currentPres;
+        let minVal = currentAlpha;
+        let maxVal = currentAlpha;
 
-        // Trace backward into frame log array
         for (let i = dataHistory.length - 1; i >= 0; i--) {
             if (currentTime - dataHistory[i].epoch > windowThresholdMs) break;
             
-            const pVal = parseFloat(dataHistory[i].pressure);
-            if (pVal < minVal) minVal = pVal;
-            if (pVal > maxVal) maxVal = pVal;
+            const aVal = parseFloat(dataHistory[i].alpha);
+            
+            // Basic adjustment handling for angular wrapped boundaries
+            if (Math.abs(aVal - currentAlpha) < 180) {
+                if (aVal < minVal) minVal = aVal;
+                if (aVal > maxVal) maxVal = aVal;
+            }
         }
 
         const delta = maxVal - minVal;
@@ -347,14 +369,14 @@
             currentRecord.alertTriggered = true;
             if (!alertActive) {
                 alertActive = true;
-                updateStatus("PRESSURE ANOMALY DETECTED", "status-alert");
+                updateStatus("VECTOR DEFLECTION DETECTED", "status-alert");
                 playAlertTone();
-                appendLogEntry(`[SPIKE] Deviation: ${delta.toFixed(3)} hPa over ${durationSec}s`, true);
+                appendLogEntry(`[SHIFT] Deflection: ${delta.toFixed(2)}° deviation over ${durationSec}s`, true);
             }
         } else {
             if (alertActive) {
                 alertActive = false;
-                updateStatus("Monitoring Active", "status-active");
+                updateStatus("Streaming Absolute Data", "status-active");
             }
         }
     }
@@ -381,7 +403,7 @@
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
 
-        ctx.strokeStyle = '#1c1c22';
+        ctx.strokeStyle = '#1a1a22';
         ctx.lineWidth = 1;
         for (let i = 0; i < h; i += h / 5) {
             ctx.beginPath();
@@ -394,11 +416,11 @@
             ctx.beginPath();
             ctx.lineWidth = 3;
             
-            const maxVal = Math.max(...plotPoints) + 0.05; 
-            const minVal = Math.min(...plotPoints) - 0.05;
+            const maxVal = Math.max(...plotPoints) + 2; 
+            const minVal = Math.min(...plotPoints) - 2;
             const range = (maxVal - minVal) || 1;
 
-            ctx.strokeStyle = alertActive ? '#ff3333' : '#00d2ff';
+            ctx.strokeStyle = alertActive ? '#ff3333' : '#ff9900';
 
             for (let i = 0; i < plotPoints.length; i++) {
                 const xPos = (i / (maxPlotPoints - 1)) * w;
@@ -411,7 +433,7 @@
 
             ctx.lineTo(w * (plotPoints.length - 1) / (maxPlotPoints - 1), h);
             ctx.lineTo(0, h);
-            ctx.fillStyle = alertActive ? 'rgba(255, 51, 51, 0.04)' : 'rgba(0, 210, 255, 0.04)';
+            ctx.fillStyle = alertActive ? 'rgba(255, 51, 51, 0.03)' : 'rgba(255, 153, 0, 0.03)';
             ctx.fill();
         }
 
@@ -422,16 +444,16 @@
         if (dataHistory.length === 0) return;
 
         let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Timestamp (ISO),Epoch (ms),Atmospheric Pressure (hPa),Threshold Breach\n";
+        csvContent += "Timestamp (ISO),Epoch (ms),Heading Alpha (deg),Pitch Beta (deg),Roll Gamma (deg),Threshold Breach\n";
 
         dataHistory.forEach(r => {
-            csvContent += `${r.isoString},${r.epoch},${r.pressure},${r.alertTriggered}\n`;
+            csvContent += `${r.isoString},${r.epoch},${r.alpha},${r.beta},${r.gamma},${r.alertTriggered}\n`;
         });
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `baro_data_${Date.now()}.csv`);
+        link.setAttribute("download", `absolute_orientation_${Date.now()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
