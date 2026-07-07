@@ -5,25 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital SB7 Spirit Box</title>
     <style>
-        body { background-color: #1a1a1a; color: #fff; font-family: 'Courier New', Courier, monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; padding: 20px 0; box-sizing: border-box; overflow-y: auto; }
-        .device { background: linear-gradient(145deg, #2a2a2a, #1f1f1f); padding: 30px; border-radius: 15px; box-shadow: 10px 10px 30px #111, -10px -10px 30px #333; width: 380px; text-align: center; border: 2px solid #333; margin: auto; }
-        .lcd-screen { background-color: #0a1a0a; border: 4px solid #000; border-radius: 8px; padding: 20px; margin-bottom: 25px; box-shadow: inset 0 0 15px rgba(0,255,0,0.2); position: relative; overflow: hidden; }
-        #waveform-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.5; pointer-events: none; }
-        .station-display { color: #4af626; font-size: 1.5em; font-weight: bold; text-shadow: 0 0 5px #4af626; margin: 10px 0; min-height: 28px; word-wrap: break-word; position: relative; z-index: 2; }
-        .status-text { color: #2e8b18; font-size: 0.9em; position: relative; z-index: 2; }
-        .controls { display: flex; flex-direction: column; gap: 15px; }
-        button { background-color: #d32f2f; color: white; border: none; padding: 15px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; text-transform: uppercase; box-shadow: 0 5px 15px rgba(211, 47, 47, 0.4); transition: background-color 0.2s; }
-        button.active { background-color: #388e3c; box-shadow: 0 5px 15px rgba(56, 142, 60, 0.4); }
-        button:disabled { background-color: #555; cursor: not-allowed; }
-        .control-group { text-align: left; background: #222; padding: 12px; border-radius: 8px; border: 1px solid #333; }
-        .control-group label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9em; color: #ccc; }
-        .control-group label span { color: #4af626; font-weight: bold; }
-        .checkbox-group { display: flex; justify-content: space-between; align-items: center; background: #222; padding: 12px; border-radius: 8px; border: 1px solid #333; }
-        .checkbox-group label { font-size: 0.9em; color: #ccc; margin: 0; }
-        input[type=checkbox] { width: 20px; height: 20px; accent-color: #d32f2f; cursor: pointer; }
-        select, input[type=range] { width: 100%; padding: 6px; background: #111; color: #4af626; border: 1px solid #444; border-radius: 4px; font-family: inherit; }
-        input[type=range] { padding: 0; margin-top: 5px; }
-        .slider-labels { display: flex; justify-content: space-between; font-size: 0.7em; color: #888; margin-top: 5px; }
+        body { background-color: #1a1a1a; color: #fff; font-family: 'Courier New', Courier, monospace; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; }
+        .device { background: linear-gradient(145deg, #2a2a2a, #1f1f1f); padding: 15px; border-radius: 12px; box-shadow: 5px 5px 15px #111; width: 100%; max-width: 360px; text-align: center; border: 1px solid #333; }
+        .lcd-screen { background-color: #0a1a0a; border: 3px solid #000; border-radius: 6px; padding: 10px; margin-bottom: 15px; box-shadow: inset 0 0 10px rgba(0,255,0,0.2); position: relative; overflow: hidden; min-height: 80px; }
+        #waveform-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.4; pointer-events: none; }
+        .station-display { color: #4af626; font-size: 1.2em; font-weight: bold; text-shadow: 0 0 5px #4af626; margin: 5px 0; min-height: 20px; position: relative; z-index: 2; }
+        .status-text { color: #2e8b18; font-size: 0.75em; position: relative; z-index: 2; }
+        .controls { display: flex; flex-direction: column; gap: 8px; }
+        button { background-color: #d32f2f; color: white; border: none; padding: 12px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; text-transform: uppercase; margin-bottom: 5px; }
+        button.active { background-color: #388e3c; }
+        .control-group { text-align: left; background: #222; padding: 8px; border-radius: 6px; border: 1px solid #333; }
+        .control-group label { display: flex; justify-content: space-between; font-size: 0.8em; color: #ccc; margin-bottom: 4px; }
+        .control-group label span { color: #4af626; }
+        .checkbox-group { display: flex; justify-content: space-between; align-items: center; background: #222; padding: 8px; border-radius: 6px; border: 1px solid #333; font-size: 0.8em; color: #ccc; }
+        input[type=checkbox] { width: 18px; height: 18px; accent-color: #d32f2f; }
+        select, input[type=range] { width: 100%; padding: 4px; background: #111; color: #4af626; border: 1px solid #444; border-radius: 4px; }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.6em; color: #777; }
     </style>
 </head>
 <body>
@@ -35,6 +32,11 @@
             <div class="status-text" id="rate-display">SWEEP: 200ms</div>
         </div>
         <div class="controls">
+            <div class="control-group">
+                <label for="sweep-rate">Sweep Rate: <span id="rate-val">200ms</span></label>
+                <input type="range" id="sweep-rate" min="50" max="2500" value="200" step="50">
+                <div class="slider-labels"><span>Fast</span><span>Slow</span></div>
+            </div>
             <button id="power-btn">Power / Start</button>
             <div class="control-group">
                 <label for="static-vol">Static Volume: <span id="static-val">5%</span></label>
@@ -49,7 +51,7 @@
                 <input type="range" id="master-treble" min="-20" max="20" value="0" step="1">
             </div>
             <div class="checkbox-group">
-                <label for="effect-isolation">Voice Isolation (Bandpass)</label>
+                <label for="effect-isolation">Voice Isolation</label>
                 <input type="checkbox" id="effect-isolation">
             </div>
             <div class="control-group">
@@ -57,33 +59,19 @@
                 <input type="range" id="effect-echo" min="0" max="100" value="0">
             </div>
             <div class="control-group">
-                <label for="pool-size">Channel Pool Size:</label>
+                <label for="pool-size">Pool Size:</label>
                 <select id="pool-size">
                     <option value="50">50 Channels</option>
                     <option value="100">100 Channels</option>
                     <option value="200" selected>200 Channels</option>
-                    <option value="350">350 Channels</option>
                     <option value="500">500 Channels</option>
                 </select>
-            </div>
-            <div class="control-group">
-                <label for="language-filter">Station Language Pool:</label>
-                <select id="language-filter">
-                    <option value="all">All Languages</option>
-                    <option value="english" selected>English Only</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label for="sweep-rate">Sweep Rate: <span id="rate-val">200ms</span></label>
-                <input type="range" id="sweep-rate" min="50" max="500" value="200" step="10">
-                <div class="slider-labels"><span>Fast</span><span>Slow</span></div>
             </div>
         </div>
     </div>
     <script>
-        let audioElements = [], isSweeping = false, isLoading = false, audioCtx, bassFilter, trebleFilter, bandpassNode, delayNode, feedbackGainNode, wetGainNode, dryGainNode, staticGainNode, staticBufferSource, analyser, masterGainNode;
-        let sweepTimer;
-        const powerBtn = document.getElementById('power-btn'), stationDisplay = document.getElementById('station'), statusDisplay = document.getElementById('status'), rateDisplay = document.getElementById('rate-display'), sweepRateSlider = document.getElementById('sweep-rate'), rateVal = document.getElementById('rate-val'), languageFilter = document.getElementById('language-filter'), poolSizeSelect = document.getElementById('pool-size'), staticVolSlider = document.getElementById('static-vol'), staticValText = document.getElementById('static-val'), bassSlider = document.getElementById('master-bass'), bassValText = document.getElementById('bass-val'), trebleSlider = document.getElementById('master-treble'), trebleValText = document.getElementById('treble-val'), isolationToggle = document.getElementById('effect-isolation'), echoSlider = document.getElementById('effect-echo'), echoValText = document.getElementById('echo-val'), canvas = document.getElementById('waveform-canvas'), canvasCtx = canvas.getContext('2d');
+        let audioElements = [], isSweeping = false, isLoading = false, audioCtx, bassFilter, trebleFilter, bandpassNode, delayNode, feedbackGainNode, wetGainNode, dryGainNode, staticGainNode, staticBufferSource, analyser, masterGainNode, sweepTimer;
+        const powerBtn = document.getElementById('power-btn'), stationDisplay = document.getElementById('station'), statusDisplay = document.getElementById('status'), rateDisplay = document.getElementById('rate-display'), sweepRateSlider = document.getElementById('sweep-rate'), rateVal = document.getElementById('rate-val'), poolSizeSelect = document.getElementById('pool-size'), staticVolSlider = document.getElementById('static-vol'), staticValText = document.getElementById('static-val'), bassSlider = document.getElementById('master-bass'), bassValText = document.getElementById('bass-val'), trebleSlider = document.getElementById('master-treble'), trebleValText = document.getElementById('treble-val'), isolationToggle = document.getElementById('effect-isolation'), echoSlider = document.getElementById('effect-echo'), echoValText = document.getElementById('echo-val'), canvas = document.getElementById('waveform-canvas'), canvasCtx = canvas.getContext('2d');
 
         function initWebAudioEngine() {
             if (!audioCtx) {
@@ -109,28 +97,16 @@
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
             for(let i=0; i<bufferSize; i++) data[i] = Math.random() * 2 - 1;
-            
-            const noise = audioCtx.createBufferSource();
-            noise.buffer = buffer;
-            
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'bandpass';
-            filter.frequency.value = 2000;
-            
-            const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(0.4, audioCtx.currentTime); 
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-            
-            noise.connect(filter);
-            filter.connect(gain);
-            gain.connect(masterGainNode);
-            noise.start();
+            const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 2000;
+            const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.4, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+            noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start();
         }
 
-        async function fetchRandomStations(language, limit) {
+        async function fetchRandomStations(limit) {
             try {
-                let apiUrl = `https://de1.api.radio-browser.info/json/stations/search?limit=${limit}&order=random&hidebroken=true${language === 'english' ? '&language=english' : ''}`;
-                const response = await fetch(apiUrl); const stations = await response.json();
+                const response = await fetch(`https://de1.api.radio-browser.info/json/stations/search?limit=${limit}&order=random&hidebroken=true&language=english`);
+                const stations = await response.json();
                 return stations.map(s => s.url_resolved);
             } catch (e) { return ["https://stream.live.vc.bbcmedia.co.uk/bbc_world_service"]; }
         }
@@ -151,8 +127,7 @@
             requestAnimationFrame(drawWaveform);
             if (!analyser) return;
             const dataArray = new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(dataArray);
-            let maxD = 0; for(let i=0; i<dataArray.length; i++) maxD = Math.max(maxD, Math.abs(dataArray[i]-128));
-            canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.strokeStyle = (maxD/128 > (parseInt(staticVolSlider.value)/100 + 0.15)) ? 'rgba(255,50,50,0.9)' : 'rgba(74,246,38,0.7)'; canvasCtx.beginPath();
+            canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.beginPath();
             for (let i = 0; i < dataArray.length; i++) { const v = dataArray[i]/128.0; canvasCtx.lineTo(i * (canvas.width/dataArray.length), v * canvas.height/2); }
             canvasCtx.stroke();
         }
@@ -169,22 +144,15 @@
             if (isLoading) return;
             if (!isSweeping) {
                 isLoading = true; initWebAudioEngine(); staticGainNode.gain.value = parseInt(staticVolSlider.value) / 100;
-                const urls = await fetchRandomStations(languageFilter.value, parseInt(poolSizeSelect.value));
+                const urls = await fetchRandomStations(parseInt(poolSizeSelect.value));
                 setupAudioPool(urls); audioElements.forEach(a => a.play().catch(()=>{}));
-                isSweeping = true; isLoading = false; powerBtn.classList.add('active'); powerBtn.innerText = "Stop Sweep"; statusDisplay.innerText = "STATUS: SWEEPING"; statusDisplay.style.color = "#4af626"; languageFilter.disabled = poolSizeSelect.disabled = true;
+                isSweeping = true; isLoading = false; powerBtn.classList.add('active'); powerBtn.innerText = "Stop Sweep"; statusDisplay.innerText = "STATUS: SWEEPING"; poolSizeSelect.disabled = true;
                 sweepTimer = setInterval(switchStation, parseInt(sweepRateSlider.value));
             } else {
-                isSweeping = false; clearInterval(sweepTimer); powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY"; statusDisplay.style.color = "#2e8b18"; stationDisplay.innerText = "-- CH --"; languageFilter.disabled = poolSizeSelect.disabled = false; if(staticGainNode) staticGainNode.gain.value = 0; destroyAudioPool();
+                isSweeping = false; clearInterval(sweepTimer); powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY"; poolSizeSelect.disabled = false; if(staticGainNode) staticGainNode.gain.value = 0; destroyAudioPool();
             }
         });
-        sweepRateSlider.oninput = (e) => { 
-            rateVal.innerText = e.target.value + "ms"; 
-            rateDisplay.innerText = `SWEEP: ${e.target.value}ms`; 
-            if(isSweeping) {
-                clearInterval(sweepTimer);
-                sweepTimer = setInterval(switchStation, parseInt(e.target.value));
-            }
-        };
+        sweepRateSlider.oninput = (e) => { rateVal.innerText = e.target.value + "ms"; rateDisplay.innerText = `SWEEP: ${e.target.value}ms`; if(isSweeping) { clearInterval(sweepTimer); sweepTimer = setInterval(switchStation, parseInt(e.target.value)); } };
         staticVolSlider.oninput = (e) => { staticValText.innerText = e.target.value + "%"; if(staticGainNode && isSweeping) staticGainNode.gain.value = e.target.value / 100; };
         bassSlider.oninput = (e) => { bassValText.innerText = (e.target.value > 0 ? "+" : "") + e.target.value + "dB"; if(bassFilter) bassFilter.gain.value = e.target.value; };
         trebleSlider.oninput = (e) => { trebleValText.innerText = (e.target.value > 0 ? "+" : "") + e.target.value + "dB"; if(trebleFilter) trebleFilter.gain.value = e.target.value; };
