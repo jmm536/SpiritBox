@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Oscilloscope Edition)</title>
+    <title>Internet Radio Spirit Box (Tone & Scope Edition)</title>
     <style>
         body {
             background-color: #121212;
@@ -49,7 +49,6 @@
             overflow: hidden;
             border-radius: 4px;
         }
-        /* Scope Container Adjustments */
         .scope-container {
             background-color: #000;
             border: 1px solid #00ff66;
@@ -125,7 +124,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v3.4 // SCOPE</h1>
+    <h1>IP-SPIRIT BOX v3.5 // SCOPE</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -154,13 +153,6 @@
                 <label for="sweep-rate">Sweep Rate: <strong><span id="rate-val">200</span>ms</strong></label>
             </div>
             <input type="range" id="sweep-rate" min="50" max="1000" step="25" value="200">
-        </div>
-
-        <div class="control-group">
-            <div class="control-row">
-                <label for="formant-shift">Static Formant Shifter: <strong><span id="formant-val">Neutral</span></strong></label>
-            </div>
-            <input type="range" id="formant-shift" min="0" max="100" value="50">
         </div>
 
         <div class="control-group">
@@ -195,29 +187,25 @@
     let stations = [];
     let audioPool = [];
     
-    // Web Audio Variables
+    // Web Audio Core
     let audioContext = null;
     let staticNode = null;
     let staticGain = null;
     let hpFilter = null;      
     let lpFilter = null;      
-    let formantFilterL = null;
-    let formantFilterH = null;
     let analyserNode = null; 
     let audioDataArray = null;
     
     let isSweeping = false;
     let sweepTimeout = null;
     let activeAudio = null;
-    let isChannelAudioVoicing = false; // Flag for drawing audio spike overlaps
+    let isChannelAudioVoicing = false;
 
-    // DOM References
+    // DOM Wire Targets
     const startBtn = document.getElementById('start-btn');
     const langSelect = document.getElementById('lang-select');
     const sweepRateInput = document.getElementById('sweep-rate');
     const rateVal = document.getElementById('rate-val');
-    const formantInput = document.getElementById('formant-shift');
-    const formantVal = document.getElementById('formant-val');
     const bassInput = document.getElementById('bass-cut');
     const bassVal = document.getElementById('bass-val');
     const trebleInput = document.getElementById('treble-cut');
@@ -228,11 +216,9 @@
     const stationInfoDiv = document.getElementById('station-info');
     const statusLog = document.getElementById('status-log');
     
-    // Canvas Setup
     const canvas = document.getElementById('scope');
     const canvasCtx = canvas.getContext('2d');
 
-    // Resize canvas calculation
     function resizeCanvas() {
         canvas.width = canvas.parentElement.clientWidth;
         canvas.height = canvas.parentElement.clientHeight;
@@ -257,14 +243,6 @@
         if (staticGain) staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.15, audioContext.currentTime);
     });
 
-    formantInput.addEventListener('input', () => {
-        const val = parseInt(formantInput.value);
-        if (val < 35) formantVal.textContent = "Deep (Ooo)";
-        else if (val > 65) formantVal.textContent = "Bright (Eee)";
-        else formantVal.textContent = "Neutral";
-        updateFormantFrequencies(val);
-    });
-
     langSelect.addEventListener('change', async () => {
         statusLog.textContent = "Reloading station directory filters...";
         await fetchStations();
@@ -272,15 +250,6 @@
             audioPool.forEach(audioObj => assignRandomStation(audioObj));
         }
     });
-
-    function updateFormantFrequencies(sliderValue) {
-        if (!formantFilterL || !formantFilterH) return;
-        const pct = sliderValue / 100;
-        const lowF = 350 + (pct * 450);    
-        const highF = 900 + (pct * 1900);  
-        formantFilterL.frequency.setValueAtTime(lowF, audioContext.currentTime);
-        formantFilterH.frequency.setValueAtTime(highF, audioContext.currentTime);
-    }
 
     function initAudioEngine() {
         if (audioContext) return;
@@ -295,28 +264,13 @@
         lpFilter.type = "lowpass";
         lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
 
-        formantFilterL = audioContext.createBiquadFilter();
-        formantFilterL.type = "peaking";
-        formantFilterL.Q.setValueAtTime(8.0, audioContext.currentTime);
-        formantFilterL.gain.setValueAtTime(15, audioContext.currentTime);
-
-        formantFilterH = audioContext.createBiquadFilter();
-        formantFilterH.type = "peaking";
-        formantFilterH.Q.setValueAtTime(8.0, audioContext.currentTime);
-        formantFilterH.gain.setValueAtTime(15, audioContext.currentTime);
-
-        // Instantiating the Matrix Analyzer Node
         analyserNode = audioContext.createAnalyser();
         analyserNode.fftSize = 1024;
         audioDataArray = new Uint8Array(analyserNode.frequencyBinCount);
 
-        updateFormantFrequencies(parseInt(formantInput.value));
-
-        // Connect Processing Node Chain
+        // Streamlined Processing Connection: Static -> Bass Cut -> Treble Cut -> Analyser -> Output
         hpFilter.connect(lpFilter);
-        lpFilter.connect(formantFilterL);
-        formantFilterL.connect(formantFilterH);
-        formantFilterH.connect(analyserNode);
+        lpFilter.connect(analyserNode);
         analyserNode.connect(audioContext.destination);
 
         const bufferSize = 2 * audioContext.sampleRate;
@@ -337,18 +291,15 @@
         staticGain.connect(hpFilter); 
         staticNode.start();
 
-        // Initialize display refresh pipeline
         renderScopeLoop();
     }
 
-    // Oscilloscope Graphic Render Pipeline
     function renderScopeLoop() {
         requestAnimationFrame(renderScopeLoop);
         
         const width = canvas.width;
         const height = canvas.height;
         
-        // Dark translucent brush sweep to clear frame smoothly
         canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
         canvasCtx.fillRect(0, 0, width, height);
 
@@ -365,11 +316,9 @@
         let x = 0;
 
         for (let i = 0; i < bufferLength; i++) {
-            // Standard static voltage vector tracking
             let v = audioDataArray ? (audioDataArray[i] / 128.0) : 1.0;
             let y = (v * height) / 2;
 
-            // Procedural Voice Injector Overlays (Simulates radio capture variations)
             if (isSweeping && isChannelAudioVoicing) {
                 const voiceSpikeMod = (Math.sin(i * 0.15) * (Math.random() * 18 - 9));
                 y += voiceSpikeMod;
@@ -384,7 +333,6 @@
             x += sliceWidth;
         }
 
-        // Draw flat line at dead center if engine is suspended
         if (!isSweeping && (!audioContext || audioContext.state !== 'running')) {
             canvasCtx.moveTo(0, height / 2);
             canvasCtx.lineTo(width, height / 2);
@@ -463,13 +411,13 @@
 
         if (activeAudio.element.readyState >= 2 && !activeAudio.element.error && !activeAudio.element.paused) {
             activeAudio.element.volume = 1.0; 
-            isChannelAudioVoicing = true; // Tell canvas loop to draw voice burst adjustments
+            isChannelAudioVoicing = true; 
 
             const cleanName = activeAudio.element.stationData.name.trim().toUpperCase().substring(0, 24);
             stationNameDiv.textContent = cleanName || "UNKNOWN SOURCE";
             stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.element.stationData.countrycode || 'GLOBAL'}`;
         } else {
-            isChannelAudioVoicing = false; // Pure static drawing state
+            isChannelAudioVoicing = false; 
             stationNameDiv.textContent = "--- DEAD AIR ---";
             stationInfoDiv.textContent = `TUNING RF INTERSTICES...`;
         }
@@ -512,7 +460,6 @@
     });
 
     fetchStations();
-    // Pre-draw steady flatline on script load
     renderScopeLoop();
 </script>
 
