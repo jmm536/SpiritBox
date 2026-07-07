@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (DSP + Language Matrix)</title>
+    <title>Internet Radio Spirit Box (Blind Sweep Engine)</title>
     <style>
         body {
             background-color: #121212;
@@ -109,7 +109,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v3.1 // DSP</h1>
+    <h1>IP-SPIRIT BOX v3.2 // BLIND SWEEP</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -133,7 +133,7 @@
             <div class="control-row">
                 <label for="sweep-rate">Sweep Rate: <strong><span id="rate-val">200</span>ms</strong></label>
             </div>
-            <input type="range" id="sweep-rate" min="100" max="1000" step="25" value="200">
+            <input type="range" id="sweep-rate" min="50" max="1000" step="25" value="200">
         </div>
 
         <div class="control-group">
@@ -187,7 +187,6 @@
     let sweepTimeout = null;
     let activeAudio = null;
 
-    // DOM Target Elements
     const startBtn = document.getElementById('start-btn');
     const langSelect = document.getElementById('lang-select');
     const sweepRateInput = document.getElementById('sweep-rate');
@@ -204,7 +203,6 @@
     const stationInfoDiv = document.getElementById('station-info');
     const statusLog = document.getElementById('status-log');
 
-    // UI Sliders Listener Events
     sweepRateInput.addEventListener('input', () => rateVal.textContent = sweepRateInput.value);
     
     bassInput.addEventListener('input', () => {
@@ -230,17 +228,11 @@
         updateFormantFrequencies(val);
     });
 
-    // Handle On-the-Fly Language Swapping
     langSelect.addEventListener('change', async () => {
         statusLog.textContent = "Reloading station directory filters...";
         await fetchStations();
-        
-        // If actively running, force background streams to flush and sync to the new language targets
         if (isSweeping && audioPool.length > 0) {
-            console.log("Hot-swapping active streaming pool to match chosen language filter.");
-            audioPool.forEach(audioObj => {
-                assignRandomStation(audioObj);
-            });
+            audioPool.forEach(audioObj => assignRandomStation(audioObj));
         }
     });
 
@@ -274,165 +266,4 @@
         formantFilterH = audioContext.createBiquadFilter();
         formantFilterH.type = "peaking";
         formantFilterH.Q.setValueAtTime(7.0, audioContext.currentTime);
-        formantFilterH.gain.setValueAtTime(14, audioContext.currentTime);
-
-        updateFormantFrequencies(parseInt(formantInput.value));
-
-        hpFilter.connect(lpFilter);
-        lpFilter.connect(formantFilterL);
-        formantFilterL.connect(formantFilterH);
-        formantFilterH.connect(audioContext.destination);
-
-        const bufferSize = 2 * audioContext.sampleRate;
-        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-        const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = Math.random() * 2 - 1;
-        }
-
-        staticNode = audioContext.createBufferSource();
-        staticNode.buffer = noiseBuffer;
-        staticNode.loop = true;
-
-        staticGain = audioContext.createGain();
-        staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.10, audioContext.currentTime);
-
-        staticNode.connect(staticGain);
-        staticGain.connect(hpFilter); 
-        staticNode.start();
-    }
-
-    async function fetchStations() {
-        try {
-            const chosenLang = langSelect.value;
-            let finalUrl = BASE_API_URL;
-            
-            // Append explicit API language filters to parameters if not set to 'all'
-            if (chosenLang !== "all") {
-                finalUrl += `&language=${chosenLang}`;
-            }
-
-            const response = await fetch(finalUrl);
-            let rawStations = await response.json();
-            
-            const isHttpsMode = window.location.protocol === 'https:';
-            if (isHttpsMode) {
-                stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
-                statusLog.textContent = `Indexed ${stations.length} secure, ${chosenLang.toUpperCase()} streams.`;
-            } else {
-                stations = rawStations;
-                statusLog.textContent = `Indexed ${stations.length} global, ${chosenLang.toUpperCase()} streams.`;
-            }
-            if (stations.length === 0) throw new Error("No stations matched parameters.");
-        } catch (error) {
-            console.error(error);
-            statusLog.textContent = "Directory sync failure. Retrying indexing server...";
-            setTimeout(fetchStations, 5000);
-        }
-    }
-
-    function assignRandomStation(audioObj) {
-        if (!stations.length) return;
-        const randomTarget = stations[Math.floor(Math.random() * stations.length)];
-        
-        audioObj.element.src = randomTarget.url_resolved || randomTarget.url;
-        audioObj.element.stationData = randomTarget;
-        audioObj.element.volume = 0;
-        
-        audioObj.element.play().catch(() => {});
-    }
-
-    function buildAudioPool() {
-        if (audioPool.length > 0) return;
-
-        for (let i = 0; i < POOL_SIZE; i++) {
-            const audioEl = new Audio();
-            audioEl.preload = "auto";
-            audioEl.crossOrigin = "anonymous"; 
-            
-            const audioObj = {
-                element: audioEl,
-                sourceNode: audioContext.createMediaElementSource(audioEl)
-            };
-
-            audioEl.addEventListener('error', () => {
-                if (isSweeping) {
-                    assignRandomStation(audioObj);
-                }
-            });
-
-            audioObj.sourceNode.connect(hpFilter);
-            assignRandomStation(audioObj);
-            audioPool.push(audioObj);
-        }
-    }
-
-    function executeSweep() {
-        if (!isSweeping) return;
-
-        if (activeAudio) {
-            activeAudio.element.volume = 0;
-            if (Math.random() < 0.45) {
-                assignRandomStation(activeAudio);
-            }
-        }
-
-        const readyChannels = audioPool.filter(a => a.element.readyState >= 2 && !a.element.paused && !a.element.error);
-
-        if (readyChannels.length > 0) {
-            activeAudio = readyChannels[Math.floor(Math.random() * readyChannels.length)];
-            activeAudio.element.volume = 1.0;
-
-            const cleanName = activeAudio.element.stationData.name.trim().toUpperCase().substring(0, 24);
-            stationNameDiv.textContent = cleanName || "UNKNOWN SOURCE";
-            stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.element.stationData.countrycode || 'GLOBAL'}`;
-        } else {
-            stationNameDiv.textContent = "TUNING DIAL...";
-            stationInfoDiv.textContent = "FILTERING STREAMS...";
-            activeAudio = null;
-        }
-
-        sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
-    }
-
-    startBtn.addEventListener('click', async () => {
-        if (!audioContext) {
-            initAudioEngine();
-        }
-        
-        if (isSweeping) {
-            isSweeping = false;
-            clearTimeout(sweepTimeout);
-            
-            audioPool.forEach(a => a.element.volume = 0);
-            if (activeAudio) activeAudio.element.volume = 0;
-            
-            if (audioContext && audioContext.state === 'running') {
-                await audioContext.suspend();
-            }
-            
-            startBtn.textContent = "START SWEEP";
-            stationNameDiv.textContent = "SWEEP HALTED";
-            stationInfoDiv.textContent = "SYSTEM STANDBY";
-        } else {
-            if (stations.length === 0) {
-                statusLog.textContent = "Awaiting directory sync connection...";
-                return;
-            }
-            
-            if (audioContext && audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-            
-            buildAudioPool();
-            isSweeping = true;
-            startBtn.textContent = "STOP SWEEP";
-            executeSweep();
-        }
-    });
-
-    fetchStations();
-</script>
-
-</body>
-</html>
+        formantFilterH.
