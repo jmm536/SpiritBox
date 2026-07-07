@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (High-Efficiency AI Fixed)</title>
+    <title>Internet Radio Spirit Box (Unified AI Engine)</title>
     <style>
         body {
             background-color: #121212;
@@ -151,11 +151,13 @@
             padding-top: 8px;
         }
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3"></script>
 </head>
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v4.3 // ASYNC-AI</h1>
+    <h1>IP-SPIRIT BOX v4.4 // UNIFIED-AI</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -167,7 +169,7 @@
     </div>
 
     <div class="terminal-container" id="terminal-log">
-        <div class="terminal-line" id="interim-text-line">AI Sandbox Initializing...</div>
+        <div class="terminal-line" id="interim-text-line">Initializing Audio Pipeline...</div>
     </div>
 
     <div class="controls">
@@ -218,7 +220,7 @@
 
 <script>
     const BASE_API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=150&hidebroken=true&codec=mp3&order=clickcount";
-    const POOL_SIZE = 4; 
+    const POOL_SIZE = 4;
     
     let stations = [];
     let audioPool = [];
@@ -234,7 +236,8 @@
     let recorderNode = null;
     let rawAudioAccumulator = [];
     let isAiDecoderActive = false;
-    let isAiWorkerBusy = false;
+    let isAiEngineBusy = false;
+    let whisperTranscriber = null;
 
     let isSweeping = false;
     let sweepTimeout = null;
@@ -301,110 +304,32 @@
         terminalLog.insertBefore(newLine, interimTextLine.nextSibling);
     }
 
-    // Dynamic Worker Blob Code 
-    const workerBlobCode = `
-        import { pipeline, env } from 'https://unpkg.com/@xenova/transformers@2.17.2';
-        env.allowLocalModels = false;
-        let transcriber = null;
-
-        self.onmessage = async (e) => {
-            const { type, buffer, sampleRate } = e.data;
-
-            if (type === 'init') {
-                try {
-                    transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
-                        quantized: true
-                    });
-                    self.postMessage({ type: 'ready' });
-                } catch (err) {
-                    self.postMessage({ type: 'error', message: err.message });
-                }
-            } else if (type === 'process') {
-                if (!transcriber) return;
-                try {
-                    const downsampled = downsample(buffer, sampleRate);
-                    const response = await transcriber(downsampled, {
-                        chunk_length_s: 30,
-                        stride_length_s: 5,
-                        return_timestamps: false
-                    });
-                    self.postMessage({ type: 'result', text: response.text });
-                } catch (err) {
-                    self.postMessage({ type: 'error', message: err.message });
-                }
-            }
-        };
-
-        function downsample(buffer, inputSampleRate) {
-            const targetSampleRate = 16000;
-            if (inputSampleRate === targetSampleRate) return buffer;
-            const ratio = inputSampleRate / targetSampleRate;
-            const newLength = Math.round(buffer.length / ratio);
-            const result = new Float32Array(newLength);
-            let offsetResult = 0, offsetBuffer = 0;
-            while (offsetResult < result.length) {
-                let nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
-                let accum = 0, count = 0;
-                for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
-                    accum += buffer[i]; count++;
-                }
-                result[offsetResult] = accum / count;
-                offsetResult++; offsetBuffer = nextOffsetBuffer;
-            }
-            return result;
-        }
-    `;
-
-    let aiWorker = null;
-
-    function initAiWorkerEngine() {
+    // Unified AI Initialization Logic
+    async function initUnifiedAiEngine() {
         try {
-            logToTerminal("DOWNLOADING 4-BIT COMPRESSED MODEL (~40MB)...");
-            const blob = new Blob([workerBlobCode], { type: 'application/javascript' });
+            if (!window.hf || !window.hf.transformers) {
+                // Fail-safe checker loop if script tag load timing drops frames
+                setTimeout(initUnifiedAiEngine, 500);
+                return;
+            }
             
-            // FIX: Explicitly passed the module format configuration dictionary flag to the constructor loop
-            aiWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+            logToTerminal("DOWNLOADING 4-BIT WHISPER MODEL (~35MB)...");
+            const { pipeline, env } = window.hf.transformers;
+            
+            env.allowLocalModels = false;
 
-            aiWorker.onmessage = (e) => {
-                const { type, text, message } = e.data;
-                if (type === 'ready') {
-                    logToTerminal("AI CORE INSTANTIATED SYNCED IN BACKGROUND THREAD.");
-                    decoderBtn.textContent = "ENABLE AI WAVEFORM DECODER";
-                    decoderBtn.disabled = false;
-                    interimTextLine.textContent = "AI Core Ready.";
-                } else if (type === 'result') {
-                    isAiWorkerBusy = false;
-                    interimTextLine.textContent = isAiDecoderActive ? "[AI WAVEFORM ANALYSIS ACTIVE]" : "";
-                    
-                    const cleanText = text
-                        .replace(/\[.*?\]/g, "")
-                        .replace(/\(.*?\)/g, "")
-                        .replace(/[^a-zA-Z\s]/g, "")
-                        .trim()
-                        .toUpperCase();
+            // Instantiate optimized speech pipeline structure directly
+            whisperTranscriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+                dtype: 'q4' // Forces ultra-fast, low-memory 4-bit integer processing
+            });
 
-                    if (cleanText.length > 2) {
-                        logToTerminal(`[AI]: ${cleanText}`, true);
-                    }
-                } else if (type === 'error') {
-                    isAiWorkerBusy = false;
-                    decoderBtn.textContent = "AI INITIALIZATION FAILED";
-                    logToTerminal(`AI FAULT: ${message}`);
-                }
-            };
-
-            // Capture top-level uncaught thread errors to prevent silent loading freezes
-            aiWorker.onerror = (err) => {
-                decoderBtn.textContent = "AI SEC-BLOCK ERROR";
-                logToTerminal("THREAD BLOCK: Verify browser permits Blob workers.");
-                console.error(err);
-            };
-
-            aiWorker.postMessage({ type: 'init' });
-
-        } catch (setupError) {
-            decoderBtn.textContent = "AI ENGINE SETUP BLOCK";
-            logToTerminal(`CRITICAL ENV EXCEPTION: ${setupError.message}`);
+            logToTerminal("AI WAVEFORM PIPELINE SYNCED AND READY.");
+            decoderBtn.textContent = "ENABLE AI WAVEFORM DECODER";
+            decoderBtn.disabled = false;
+            interimTextLine.textContent = "AI Core Ready.";
+        } catch (err) {
+            decoderBtn.textContent = "AI INITIALIZATION FAILED";
+            logToTerminal(`ERROR: ${err.message}`);
         }
     }
 
@@ -434,15 +359,17 @@
         recorderNode.connect(audioContext.destination);
 
         recorderNode.onaudioprocess = (e) => {
-            if (!isAiDecoderActive || !isSweeping || isAiWorkerBusy) return;
+            if (!isAiDecoderActive || !isSweeping || isAiEngineBusy) return;
             const inputData = e.inputBuffer.getChannelData(0);
             rawAudioAccumulator.push(...inputData);
 
-            const sampleCeiling = audioContext.sampleRate * 3;
+            const sampleCeiling = audioContext.sampleRate * 3; // 3-Second capture frames
             if (rawAudioAccumulator.length >= sampleCeiling) {
                 const chunkToProcess = new Float32Array(rawAudioAccumulator);
                 rawAudioAccumulator = []; 
-                evaluateGateAndDispatch(chunkToProcess);
+                
+                // Deferred check ensures main rendering threads don't hitch
+                setTimeout(() => evaluateGateAndDispatch(chunkToProcess), 0);
             }
         };
 
@@ -468,6 +395,8 @@
     }
 
     function evaluateGateAndDispatch(floatArray) {
+        if (!whisperTranscriber || isAiEngineBusy) return;
+
         const totalSamples = floatArray.length;
         const windowSize = Math.floor(totalSamples / 10);
         let rmsValues = [];
@@ -483,16 +412,58 @@
 
         const deltaRMS = Math.max(...rmsValues) - Math.min(...rmsValues);
 
+        // Speech Variance Filter Gate
         if (deltaRMS > 0.045 && isChannelAudioVoicing) {
-            isAiWorkerBusy = true;
+            isAiEngineBusy = true;
             interimTextLine.textContent = "[PROCESSING AUDIO SPECTRUM...]";
             
-            aiWorker.postMessage({
-                type: 'process',
-                buffer: floatArray,
-                sampleRate: audioContext.sampleRate
-            });
+            // Asynchronous Execution Window Allocation
+            setTimeout(async () => {
+                try {
+                    const downsampled = downsample(floatArray, audioContext.sampleRate);
+                    const response = await whisperTranscriber(downsampled, {
+                        chunk_length_s: 30,
+                        stride_length_s: 5,
+                        return_timestamps: false
+                    });
+
+                    const cleanText = response.text
+                        .replace(/\[.*?\]/g, "")
+                        .replace(/\(.*?\)/g, "")
+                        .replace(/[^a-zA-Z\s]/g, "")
+                        .trim()
+                        .toUpperCase();
+
+                    if (cleanText.length > 2) {
+                        logToTerminal(`[AI]: ${cleanText}`, true);
+                    }
+                } catch (err) {
+                    console.error(err);
+                } finally {
+                    isAiEngineBusy = false;
+                    interimTextLine.textContent = isAiDecoderActive ? "[AI WAVEFORM ANALYSIS ACTIVE]" : "";
+                }
+            }, 10);
         }
+    }
+
+    function downsample(buffer, inputSampleRate) {
+        const targetSampleRate = 16000;
+        if (inputSampleRate === targetSampleRate) return buffer;
+        const ratio = inputSampleRate / targetSampleRate;
+        const newLength = Math.round(buffer.length / ratio);
+        const result = new Float32Array(newLength);
+        let offsetResult = 0, offsetBuffer = 0;
+        while (offsetResult < result.length) {
+            let nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+            let accum = 0, count = 0;
+            for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+                accum += buffer[i]; count++;
+            }
+            result[offsetResult] = accum / count;
+            offsetResult++; offsetBuffer = nextOffsetBuffer;
+        }
+        return result;
     }
 
     function renderScopeLoop() {
@@ -600,7 +571,7 @@
                 if (isSweeping) assignRandomStation(audioObj);
             });
 
-            assignRandom station(audioObj);
+            assignRandomStation(audioObj);
             audioPool.push(audioObj);
         }
     }
@@ -634,6 +605,8 @@
     }
 
     decoderBtn.addEventListener('click', () => {
+        if (!whisperTranscriber) return;
+
         if (isAiDecoderActive) {
             isAiDecoderActive = false;
             decoderBtn.textContent = "ENABLE AI WAVEFORM DECODER";
@@ -647,7 +620,7 @@
             decoderBtn.classList.add('active-decoding');
             interimTextLine.textContent = "[AI WAVEFORM ANALYSIS ACTIVE]";
             rawAudioAccumulator = [];
-            logToTerminal("AI FILTER ONLINE: CAPTURING AUDIO FRACTION SEQUENCES...");
+            logToTerminal("AI FILTER ONLINE: CAPTURING WAVEFORM FRAGMENTS...");
         }
     });
 
@@ -686,7 +659,7 @@
     });
 
     fetchStations();
-    initAiWorkerEngine();
+    setTimeout(initUnifiedAiEngine, 500);
     renderScopeLoop();
 </script>
 
