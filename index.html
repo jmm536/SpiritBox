@@ -3,117 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Stable Hybrid)</title>
+    <title>Spirit Box v1.0</title>
     <style>
-        body { background-color: #121212; color: #00ff66; font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .container { border: 2px solid #00ff66; padding: 20px; background-color: #1a1a1a; border-radius: 8px; width: 100%; max-width: 440px; }
-        h1 { text-align: center; font-size: 1.4rem; text-shadow: 0 0 10px rgba(0, 255, 102, 0.5); }
-        .display { background-color: #000; border: 1px solid #00ff66; padding: 15px; height: 70px; margin-bottom: 10px; text-align: center; }
-        .scope-container { background-color: #000; border: 1px solid #00ff66; width: 100%; height: 100px; margin-bottom: 20px; }
-        canvas { width: 100%; height: 100%; display: block; }
-        .controls { display: flex; flex-direction: column; gap: 15px; }
-        button { background-color: #00ff66; color: #000; border: none; padding: 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 1.2rem; }
-        input[type="range"] { width: 100%; accent-color: #00ff66; }
-        .status { font-size: 0.7rem; color: #666; text-align: center; margin-top: 10px; }
+        body { background: #121212; color: #00ff66; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { border: 2px solid #00ff66; padding: 20px; text-align: center; width: 80%; }
+        button { background: #00ff66; border: none; padding: 20px; font-size: 1.5rem; font-weight: bold; cursor: pointer; width: 100%; }
+        #log { margin-top: 20px; font-size: 0.8rem; color: #888; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX // STABLE</h1>
-    <div class="display">
-        <div id="station-name">SYSTEM READY</div>
-    </div>
-    <div class="scope-container"><canvas id="scope"></canvas></div>
-    
-    <div class="controls">
-        <button id="start-btn">START SWEEP</button>
-        <div>
-            <label>Bass Cut (HPF): <span id="bass-val">150</span>Hz</label>
-            <input type="range" id="bass-cut" min="20" max="1000" value="150">
-        </div>
-        <div>
-            <label>Treble Cut (LPF): <span id="treble-val">8.0</span>kHz</label>
-            <input type="range" id="treble-cut" min="1000" max="20000" value="8000">
-        </div>
-    </div>
-    <div class="status" id="status-log">Ready. Tap Start to initialize audio.</div>
+    <h1>Spirit Box v1.0</h1>
+    <button id="start-btn">START SWEEP</button>
+    <div id="log">Ready to connect.</div>
 </div>
 
 <script>
-    let audioContext, hpFilter, lpFilter, analyserNode, sweepTimeout;
+    let audio = new Audio();
     let isSweeping = false;
-    let audioPool = [];
-    const POOL_SIZE = 4;
-    const canvas = document.getElementById('scope');
-    const ctx = canvas.getContext('2d');
+    let stations = [];
 
-    async function init() {
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            hpFilter = audioContext.createBiquadFilter();
-            hpFilter.type = "highpass";
-            hpFilter.frequency.value = 150;
-            lpFilter = audioContext.createBiquadFilter();
-            lpFilter.type = "lowpass";
-            lpFilter.frequency.value = 8000;
-            analyserNode = audioContext.createAnalyser();
-            analyserNode.fftSize = 128;
-            hpFilter.connect(lpFilter);
-            lpFilter.connect(analyserNode);
-            analyserNode.connect(audioContext.destination);
+    async function fetchStations() {
+        document.getElementById('log').textContent = "Fetching stations...";
+        try {
+            const res = await fetch("https://de1.api.radio-browser.info/json/stations/search?limit=50&hidebroken=true&codec=mp3");
+            stations = await res.json();
+            document.getElementById('log').textContent = `Loaded ${stations.length} stations.`;
+        } catch (e) {
+            document.getElementById('log').textContent = "Error loading stations.";
         }
-        await audioContext.resume();
+    }
+
+    async function sweep() {
+        if (!isSweeping) return;
+        
+        // Pick a random station
+        const station = stations[Math.floor(Math.random() * stations.length)];
+        audio.src = station.url_resolved;
+        
+        // Mobile browsers require this to play
+        try {
+            await audio.play();
+            document.getElementById('log').textContent = `Playing: ${station.name}`;
+        } catch (e) {
+            document.getElementById('log').textContent = "Waiting for interaction...";
+        }
+
+        setTimeout(sweep, 2000); // Sweep every 2 seconds
     }
 
     document.getElementById('start-btn').addEventListener('click', async () => {
-        await init();
-        if (isSweeping) {
-            isSweeping = false;
-            startBtn.textContent = "START SWEEP";
-        } else {
+        if (!isSweeping) {
             isSweeping = true;
-            startBtn.textContent = "STOP SWEEP";
-            buildPool();
+            document.getElementById('start-btn').textContent = "STOP";
+            await fetchStations();
             sweep();
+        } else {
+            isSweeping = false;
+            document.getElementById('start-btn').textContent = "START SWEEP";
+            audio.pause();
+            document.getElementById('log').textContent = "Stopped.";
         }
     });
-
-    function buildPool() {
-        if (audioPool.length > 0) return;
-        for (let i = 0; i < POOL_SIZE; i++) {
-            let el = new Audio();
-            el.crossOrigin = "anonymous";
-            audioPool.push(el);
-        }
-    }
-
-    function sweep() {
-        if (!isSweeping) return;
-        let audio = audioPool[Math.floor(Math.random() * audioPool.length)];
-        // Dummy URL for demonstration; replace with actual Radio-Browser API fetching logic
-        audio.src = "https://stream.live.com/radio.mp3"; 
-        audio.play().catch(() => {});
-        document.getElementById('station-name').textContent = "SWEEPING...";
-        setTimeout(sweep, 200);
-    }
-
-    function render() {
-        requestAnimationFrame(render);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0,0,canvas.width, canvas.height);
-        if (analyserNode) {
-            let data = new Uint8Array(analyserNode.frequencyBinCount);
-            analyserNode.getByteTimeDomainData(data);
-            ctx.strokeStyle = '#00ff66';
-            ctx.beginPath();
-            for(let i=0; i<data.length; i++) {
-                ctx.lineTo(i * (canvas.width/data.length), (data[i]/255) * canvas.height);
-            }
-            ctx.stroke();
-        }
-    }
-    render();
 </script>
 </body>
 </html>
