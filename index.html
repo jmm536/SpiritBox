@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Unbrickable AI Engine)</title>
+    <title>Internet Radio Spirit Box (Polished AI Engine)</title>
     <style>
         body {
             background-color: #121212;
@@ -157,7 +157,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v4.5 // HARDENED AI</h1>
+    <h1>IP-SPIRIT BOX v4.6 // FIXED BANDS</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -304,22 +304,19 @@
         terminalLog.insertBefore(newLine, interimTextLine.nextSibling);
     }
 
-    // Hardened, Flattened AI Initialization
     async function initHardenenedAiEngine() {
         try {
-            // Target the script tag global namespace context directly
             if (!window.Xenova || !window.Xenova.pipeline) {
                 setTimeout(initHardenenedAiEngine, 200);
                 return;
             }
             
             decoderBtn.textContent = "DOWNLOADING AI MODEL (~75MB)...";
-            logToTerminal("DOWNLOADING COMPRESSED SPEECH NETWORK PARALLEL MODEL...");
+            logToTerminal("CONNECTING TO MODEL DATASTORES...");
             
             const { pipeline, env } = window.Xenova;
             env.allowLocalModels = false;
 
-            // Instantiates model structure cleanly across standard environments
             whisperTranscriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
                 quantized: true
             });
@@ -364,7 +361,6 @@
             const inputData = e.inputBuffer.getChannelData(0);
             rawAudioAccumulator.push(...inputData);
 
-            // MOBILE SPEED UPGRADE: Tightened the window to 2-second sampling blocks
             const sampleCeiling = audioContext.sampleRate * 2; 
             if (rawAudioAccumulator.length >= sampleCeiling) {
                 const chunkToProcess = new Float32Array(rawAudioAccumulator);
@@ -449,4 +445,54 @@
     function downsample(buffer, inputSampleRate) {
         const targetSampleRate = 16000;
         if (inputSampleRate === targetSampleRate) return buffer;
-        const ratio =
+        const ratio = inputSampleRate / targetSampleRate;
+        const newLength = Math.round(buffer.length / ratio);
+        const result = new Float32Array(newLength);
+        let offsetResult = 0, offsetBuffer = 0;
+        while (offsetResult < result.length) {
+            let nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+            let accum = 0, count = 0;
+            for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+                accum += buffer[i]; count++;
+            }
+            result[offsetResult] = accum / count;
+            offsetResult++; offsetBuffer = nextOffsetBuffer;
+        }
+        return result;
+    }
+
+    function renderScopeLoop() {
+        requestAnimationFrame(renderScopeLoop);
+        
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        canvasCtx.fillRect(0, 0, width, height);
+
+        if (analyserNode) {
+            analyserNode.getByteTimeDomainData(audioDataArray);
+        }
+
+        canvasCtx.lineWidth = 2.0;
+        canvasCtx.strokeStyle = '#00ff66';
+        canvasCtx.beginPath();
+
+        const bufferLength = audioDataArray ? audioDataArray.length : 64;
+        const sliceWidth = width / (bufferLength - 1);
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+            let v = audioDataArray ? (audioDataArray[i] / 128.0) - 1.0 : 0.0;
+
+            if (isSweeping && isChannelAudioVoicing) {
+                let norm = i / (bufferLength - 1);
+                let centerEnvelope = Math.sin(norm * Math.PI); 
+                let organicWave = Math.sin(norm * 2.0 + Date.now() * 0.04) * 0.5;
+                v += centerEnvelope * organicWave;
+            }
+
+            v = Math.max(-0.90, Math.min(0.90, v));
+            let y = (height / 2) + (v * (height / 2));
+
+            if (i === 0) canvasCtx.
