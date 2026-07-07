@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spirit Box Controls</title>
+    <title>Spirit Box // Visualizer</title>
     <style>
         body { background: #121212; color: #00ff66; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 15px; }
         .container { border: 2px solid #00ff66; padding: 20px; width: 100%; max-width: 400px; background: #1a1a1a; }
@@ -11,13 +11,16 @@
         button { background: #00ff66; border: none; padding: 15px; font-weight: bold; width: 100%; font-size: 1.2rem; cursor: pointer; }
         label { display: block; font-size: 0.8rem; margin-bottom: 5px; }
         input { width: 100%; accent-color: #00ff66; }
+        canvas { width: 100%; height: 80px; background: #000; border: 1px solid #00ff66; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Spirit Box</h1>
+    <h1>Spirit Box v1.1</h1>
     <button id="start-btn">START SWEEP</button>
+
+    <canvas id="scope"></canvas>
 
     <div class="control">
         <label>Sweep Rate: <span id="rate-val">200</span>ms</label>
@@ -25,12 +28,12 @@
     </div>
 
     <div class="control">
-        <label>Bass (High Pass): <span id="bass-val">150</span>Hz</label>
+        <label>Bass Cut (HPF): <span id="bass-val">150</span>Hz</label>
         <input type="range" id="bass" min="20" max="1000" value="150">
     </div>
 
     <div class="control">
-        <label>Tone (Low Pass): <span id="tone-val">8000</span>Hz</label>
+        <label>Tone (LPF): <span id="tone-val">8000</span>Hz</label>
         <input type="range" id="tone" min="1000" max="20000" value="8000">
     </div>
 
@@ -38,16 +41,15 @@
         <label>Pitch/Speed: <span id="pitch-val">1.0</span>x</label>
         <input type="range" id="pitch" min="0.5" max="2.0" step="0.1" value="1.0">
     </div>
-
-    <div id="log" style="font-size: 0.7rem; color: #666; text-align: center;">Ready.</div>
 </div>
 
 <script>
-    let audioContext, audio, source, hp, lp;
+    let audioContext, audio, source, hp, lp, analyser;
     let isSweeping = false;
     let stations = [];
+    const canvas = document.getElementById('scope');
+    const ctx = canvas.getContext('2d');
 
-    // Initialize Audio Graph
     function initAudio() {
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -57,15 +59,21 @@
             source = audioContext.createMediaElementSource(audio);
             hp = audioContext.createBiquadFilter();
             hp.type = "highpass";
+            hp.frequency.value = 150;
+            
             lp = audioContext.createBiquadFilter();
             lp.type = "lowpass";
+            lp.frequency.value = 8000;
+            
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 128; // Optimized for mobile
 
-            source.connect(hp).connect(lp).connect(audioContext.destination);
+            source.connect(hp).connect(lp).connect(analyser).connect(audioContext.destination);
         }
         audioContext.resume();
     }
 
-    // UI Listeners
+    // UI Updates
     document.getElementById('sweep-rate').oninput = (e) => document.getElementById('rate-val').textContent = e.target.value;
     document.getElementById('bass').oninput = (e) => {
         document.getElementById('bass-val').textContent = e.target.value;
@@ -85,9 +93,7 @@
         const station = stations[Math.floor(Math.random() * stations.length)];
         audio.src = station.url_resolved;
         audio.play().catch(() => {});
-        
-        let rate = document.getElementById('sweep-rate').value;
-        setTimeout(sweep, rate);
+        setTimeout(sweep, document.getElementById('sweep-rate').value);
     }
 
     document.getElementById('start-btn').addEventListener('click', async () => {
@@ -95,8 +101,10 @@
         if (!isSweeping) {
             isSweeping = true;
             document.getElementById('start-btn').textContent = "STOP";
-            const res = await fetch("https://de1.api.radio-browser.info/json/stations/search?limit=50&hidebroken=true&codec=mp3");
-            stations = await res.json();
+            if (stations.length === 0) {
+                const res = await fetch("https://de1.api.radio-browser.info/json/stations/search?limit=50&hidebroken=true&codec=mp3");
+                stations = await res.json();
+            }
             sweep();
         } else {
             isSweeping = false;
@@ -104,6 +112,30 @@
             audio.pause();
         }
     });
+
+    function draw() {
+        requestAnimationFrame(draw);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0,0,canvas.width, canvas.height);
+        
+        if (analyser) {
+            const data = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteTimeDomainData(data);
+            
+            ctx.strokeStyle = '#00ff66';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for(let i=0; i<data.length; i++) {
+                let x = i * (canvas.width/data.length);
+                let y = (data[i]/255) * canvas.height;
+                if(i===0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+    }
+    draw();
 </script>
 </body>
 </html>
