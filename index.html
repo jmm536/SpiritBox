@@ -3,108 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spirit Box // Forced-Wake Edition</title>
+    <title>Internet Radio Spirit Box (Stable Hybrid)</title>
     <style>
-        body { background-color: #121212; color: #00ff66; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 15px; }
-        .container { border: 2px solid #00ff66; padding: 20px; background: #1a1a1a; border-radius: 8px; width: 100%; max-width: 460px; }
-        .display { background: #000; border: 1px solid #00ff66; padding: 10px; margin-bottom: 10px; text-align: center; font-size: 0.9rem; }
-        .scope-container { background: #000; border: 1px solid #00ff66; width: 100%; height: 80px; margin-bottom: 10px; }
-        canvas { width: 100%; height: 100%; }
-        button { background: #00ff66; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 1.1rem; }
-        .debug { font-size: 0.7rem; color: #ff3333; text-align: center; margin-top: 10px; }
+        body { background-color: #121212; color: #00ff66; font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .container { border: 2px solid #00ff66; padding: 20px; background-color: #1a1a1a; border-radius: 8px; width: 100%; max-width: 440px; }
+        h1 { text-align: center; font-size: 1.4rem; text-shadow: 0 0 10px rgba(0, 255, 102, 0.5); }
+        .display { background-color: #000; border: 1px solid #00ff66; padding: 15px; height: 70px; margin-bottom: 10px; text-align: center; }
+        .scope-container { background-color: #000; border: 1px solid #00ff66; width: 100%; height: 100px; margin-bottom: 20px; }
+        canvas { width: 100%; height: 100%; display: block; }
+        .controls { display: flex; flex-direction: column; gap: 15px; }
+        button { background-color: #00ff66; color: #000; border: none; padding: 15px; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 1.2rem; }
+        input[type="range"] { width: 100%; accent-color: #00ff66; }
+        .status { font-size: 0.7rem; color: #666; text-align: center; margin-top: 10px; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
 </head>
 <body>
 
 <div class="container">
-    <h1>IP-BOX // WAKE-LOCK</h1>
-    <div class="display" id="display">
-        <div id="status-text">SYSTEM STANDBY</div>
+    <h1>IP-SPIRIT BOX // STABLE</h1>
+    <div class="display">
+        <div id="station-name">SYSTEM READY</div>
     </div>
     <div class="scope-container"><canvas id="scope"></canvas></div>
-    <button id="start-btn">TAP TO WAKE & START</button>
-    <div id="debug-log" class="debug"></div>
+    
+    <div class="controls">
+        <button id="start-btn">START SWEEP</button>
+        <div>
+            <label>Bass Cut (HPF): <span id="bass-val">150</span>Hz</label>
+            <input type="range" id="bass-cut" min="20" max="1000" value="150">
+        </div>
+        <div>
+            <label>Treble Cut (LPF): <span id="treble-val">8.0</span>kHz</label>
+            <input type="range" id="treble-cut" min="1000" max="20000" value="8000">
+        </div>
+    </div>
+    <div class="status" id="status-log">Ready. Tap Start to initialize audio.</div>
 </div>
 
 <script>
-    let audioContext = null;
+    let audioContext, hpFilter, lpFilter, analyserNode, sweepTimeout;
     let isSweeping = false;
     let audioPool = [];
-    let hpFilter, lpFilter, analyserNode;
-    
-    const startBtn = document.getElementById('start-btn');
-    const debugLog = document.getElementById('debug-log');
-    const statusText = document.getElementById('status-text');
+    const POOL_SIZE = 4;
+    const canvas = document.getElementById('scope');
+    const ctx = canvas.getContext('2d');
 
-    async function initAudio() {
-        // FORCED WAKE-LOCK: Resume context on every single tap
+    async function init() {
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-            debugLog.textContent = "AudioContext Resumed.";
-        }
-
-        if (!hpFilter) {
             hpFilter = audioContext.createBiquadFilter();
             hpFilter.type = "highpass";
             hpFilter.frequency.value = 150;
-            
             lpFilter = audioContext.createBiquadFilter();
             lpFilter.type = "lowpass";
             lpFilter.frequency.value = 8000;
-            
             analyserNode = audioContext.createAnalyser();
             analyserNode.fftSize = 128;
-            
             hpFilter.connect(lpFilter);
             lpFilter.connect(analyserNode);
             analyserNode.connect(audioContext.destination);
         }
+        await audioContext.resume();
     }
 
-    startBtn.addEventListener('click', async () => {
-        await initAudio();
-        
-        if (audioContext.state !== 'running') {
-            debugLog.textContent = "Audio blocked by browser. Tap again.";
-            return;
-        }
-
-        if (!isSweeping) {
-            isSweeping = true;
-            startBtn.textContent = "STOP SWEEP";
-            statusText.textContent = "SWEEPING...";
-            startSweepLoop();
-        } else {
+    document.getElementById('start-btn').addEventListener('click', async () => {
+        await init();
+        if (isSweeping) {
             isSweeping = false;
             startBtn.textContent = "START SWEEP";
-            statusText.textContent = "SYSTEM STANDBY";
+        } else {
+            isSweeping = true;
+            startBtn.textContent = "STOP SWEEP";
+            buildPool();
+            sweep();
         }
     });
 
-    function startSweepLoop() {
-        if (!isSweeping) return;
-        // Simple test tone to verify audio works
-        const osc = audioContext.createOscillator();
-        osc.connect(hpFilter);
-        osc.start();
-        osc.stop(audioContext.currentTime + 0.1);
-        setTimeout(startSweepLoop, 200);
+    function buildPool() {
+        if (audioPool.length > 0) return;
+        for (let i = 0; i < POOL_SIZE; i++) {
+            let el = new Audio();
+            el.crossOrigin = "anonymous";
+            audioPool.push(el);
+        }
     }
 
-    // Basic Scope Loop
-    const canvas = document.getElementById('scope');
-    const ctx = canvas.getContext('2d');
-    function draw() {
-        requestAnimationFrame(draw);
+    function sweep() {
+        if (!isSweeping) return;
+        let audio = audioPool[Math.floor(Math.random() * audioPool.length)];
+        // Dummy URL for demonstration; replace with actual Radio-Browser API fetching logic
+        audio.src = "https://stream.live.com/radio.mp3"; 
+        audio.play().catch(() => {});
+        document.getElementById('station-name').textContent = "SWEEPING...";
+        setTimeout(sweep, 200);
+    }
+
+    function render() {
+        requestAnimationFrame(render);
         ctx.fillStyle = '#000';
         ctx.fillRect(0,0,canvas.width, canvas.height);
-        if(analyserNode) {
-            const data = new Uint8Array(analyserNode.frequencyBinCount);
+        if (analyserNode) {
+            let data = new Uint8Array(analyserNode.frequencyBinCount);
             analyserNode.getByteTimeDomainData(data);
             ctx.strokeStyle = '#00ff66';
             ctx.beginPath();
@@ -114,7 +113,7 @@
             ctx.stroke();
         }
     }
-    draw();
+    render();
 </script>
 </body>
 </html>
