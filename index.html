@@ -82,7 +82,7 @@
     </div>
     <script>
         let audioElements = [], isSweeping = false, isLoading = false, audioCtx, bassFilter, trebleFilter, bandpassNode, delayNode, feedbackGainNode, wetGainNode, dryGainNode, staticGainNode, staticBufferSource, analyser, masterGainNode;
-        let lastSweepTime = 0, sweepRequest;
+        let sweepTimer;
         const powerBtn = document.getElementById('power-btn'), stationDisplay = document.getElementById('station'), statusDisplay = document.getElementById('status'), rateDisplay = document.getElementById('rate-display'), sweepRateSlider = document.getElementById('sweep-rate'), rateVal = document.getElementById('rate-val'), languageFilter = document.getElementById('language-filter'), poolSizeSelect = document.getElementById('pool-size'), staticVolSlider = document.getElementById('static-vol'), staticValText = document.getElementById('static-val'), bassSlider = document.getElementById('master-bass'), bassValText = document.getElementById('bass-val'), trebleSlider = document.getElementById('master-treble'), trebleValText = document.getElementById('treble-val'), isolationToggle = document.getElementById('effect-isolation'), echoSlider = document.getElementById('effect-echo'), echoValText = document.getElementById('echo-val'), canvas = document.getElementById('waveform-canvas'), canvasCtx = canvas.getContext('2d');
 
         function initWebAudioEngine() {
@@ -149,7 +149,7 @@
         function drawWaveform() {
             if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
             requestAnimationFrame(drawWaveform);
-            if (!analyser || !isSweeping) { canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.beginPath(); canvasCtx.moveTo(0, canvas.height/2); canvasCtx.lineTo(canvas.width, canvas.height/2); canvasCtx.strokeStyle = 'rgba(46,139,24,0.5)'; canvasCtx.stroke(); return; }
+            if (!analyser) return;
             const dataArray = new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(dataArray);
             let maxD = 0; for(let i=0; i<dataArray.length; i++) maxD = Math.max(maxD, Math.abs(dataArray[i]-128));
             canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.strokeStyle = (maxD/128 > (parseInt(staticVolSlider.value)/100 + 0.15)) ? 'rgba(255,50,50,0.9)' : 'rgba(74,246,38,0.7)'; canvasCtx.beginPath();
@@ -157,16 +157,12 @@
             canvasCtx.stroke();
         }
 
-        function performSweep(timestamp) {
-            if (!isSweeping) return;
-            if (timestamp - lastSweepTime > parseInt(sweepRateSlider.value)) {
-                audioElements.forEach(a => a.volume = 0);
-                const sel = audioElements[Math.floor(Math.random() * audioElements.length)];
-                if(sel) { sel.volume = 1; triggerChannelClick(); }
-                stationDisplay.innerText = `POOL CH ${audioElements.indexOf(sel) + 1}`;
-                lastSweepTime = timestamp;
-            }
-            sweepRequest = requestAnimationFrame(performSweep);
+        function switchStation() {
+            if (!isSweeping || audioElements.length === 0) return;
+            audioElements.forEach(a => a.volume = 0);
+            const sel = audioElements[Math.floor(Math.random() * audioElements.length)];
+            if(sel) { sel.volume = 1; triggerChannelClick(); }
+            stationDisplay.innerText = `POOL CH ${audioElements.indexOf(sel) + 1}`;
         }
 
         powerBtn.addEventListener('click', async () => {
@@ -175,12 +171,20 @@
                 isLoading = true; initWebAudioEngine(); staticGainNode.gain.value = parseInt(staticVolSlider.value) / 100;
                 const urls = await fetchRandomStations(languageFilter.value, parseInt(poolSizeSelect.value));
                 setupAudioPool(urls); audioElements.forEach(a => a.play().catch(()=>{}));
-                isSweeping = true; isLoading = false; powerBtn.classList.add('active'); powerBtn.innerText = "Stop Sweep"; statusDisplay.innerText = "STATUS: SWEEPING"; statusDisplay.style.color = "#4af626"; languageFilter.disabled = poolSizeSelect.disabled = true; lastSweepTime = performance.now(); sweepRequest = requestAnimationFrame(performSweep);
+                isSweeping = true; isLoading = false; powerBtn.classList.add('active'); powerBtn.innerText = "Stop Sweep"; statusDisplay.innerText = "STATUS: SWEEPING"; statusDisplay.style.color = "#4af626"; languageFilter.disabled = poolSizeSelect.disabled = true;
+                sweepTimer = setInterval(switchStation, parseInt(sweepRateSlider.value));
             } else {
-                isSweeping = false; cancelAnimationFrame(sweepRequest); powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY"; statusDisplay.style.color = "#2e8b18"; stationDisplay.innerText = "-- CH --"; languageFilter.disabled = poolSizeSelect.disabled = false; if(staticGainNode) staticGainNode.gain.value = 0; destroyAudioPool();
+                isSweeping = false; clearInterval(sweepTimer); powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY"; statusDisplay.style.color = "#2e8b18"; stationDisplay.innerText = "-- CH --"; languageFilter.disabled = poolSizeSelect.disabled = false; if(staticGainNode) staticGainNode.gain.value = 0; destroyAudioPool();
             }
         });
-        sweepRateSlider.oninput = (e) => { rateVal.innerText = e.target.value + "ms"; rateDisplay.innerText = `SWEEP: ${e.target.value}ms`; };
+        sweepRateSlider.oninput = (e) => { 
+            rateVal.innerText = e.target.value + "ms"; 
+            rateDisplay.innerText = `SWEEP: ${e.target.value}ms`; 
+            if(isSweeping) {
+                clearInterval(sweepTimer);
+                sweepTimer = setInterval(switchStation, parseInt(e.target.value));
+            }
+        };
         staticVolSlider.oninput = (e) => { staticValText.innerText = e.target.value + "%"; if(staticGainNode && isSweeping) staticGainNode.gain.value = e.target.value / 100; };
         bassSlider.oninput = (e) => { bassValText.innerText = (e.target.value > 0 ? "+" : "") + e.target.value + "dB"; if(bassFilter) bassFilter.gain.value = e.target.value; };
         trebleSlider.oninput = (e) => { trebleValText.innerText = (e.target.value > 0 ? "+" : "") + e.target.value + "dB"; if(trebleFilter) trebleFilter.gain.value = e.target.value; };
