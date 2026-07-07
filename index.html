@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (High-Efficiency AI)</title>
+    <title>Internet Radio Spirit Box (High-Efficiency AI Fixed)</title>
     <style>
         body {
             background-color: #121212;
@@ -155,7 +155,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v4.2 // EFF-AI</h1>
+    <h1>IP-SPIRIT BOX v4.3 // ASYNC-AI</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -167,7 +167,7 @@
     </div>
 
     <div class="terminal-container" id="terminal-log">
-        <div class="terminal-line" id="interim-text-line">AI Background Sandbox Sleeping.</div>
+        <div class="terminal-line" id="interim-text-line">AI Sandbox Initializing...</div>
     </div>
 
     <div class="controls">
@@ -218,7 +218,7 @@
 
 <script>
     const BASE_API_URL = "https://de1.api.radio-browser.info/json/stations/search?limit=150&hidebroken=true&codec=mp3&order=clickcount";
-    const POOL_SIZE = 4; // Maintained lightweight background connection density
+    const POOL_SIZE = 4; 
     
     let stations = [];
     let audioPool = [];
@@ -241,7 +241,6 @@
     let activeAudio = null;
     let isChannelAudioVoicing = false;
 
-    // DOM Target Nodes
     const startBtn = document.getElementById('start-btn');
     const decoderBtn = document.getElementById('decoder-btn');
     const langSelect = document.getElementById('lang-select');
@@ -302,10 +301,9 @@
         terminalLog.insertBefore(newLine, interimTextLine.nextSibling);
     }
 
-    // HIGH EFFICIENCY UPGRADE: Building the Isolated Web Worker Script Block dynamically via Blobs
-    // This moves the entire machine learning runtime environment off the phone browser's main interface thread.
+    // Dynamic Worker Blob Code 
     const workerBlobCode = `
-        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+        import { pipeline, env } from 'https://unpkg.com/@xenova/transformers@2.17.2';
         env.allowLocalModels = false;
         let transcriber = null;
 
@@ -314,7 +312,6 @@
 
             if (type === 'init') {
                 try {
-                    // Forces quantized: true to downscale precision to low-overhead 4-bit configurations
                     transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
                         quantized: true
                     });
@@ -325,7 +322,6 @@
             } else if (type === 'process') {
                 if (!transcriber) return;
                 try {
-                    // Downsample input block sequence down to Whisper standard 16kHz
                     const downsampled = downsample(buffer, sampleRate);
                     const response = await transcriber(downsampled, {
                         chunk_length_s: 30,
@@ -362,37 +358,54 @@
     let aiWorker = null;
 
     function initAiWorkerEngine() {
-        logToTerminal("SPINNING UP BACKGROUND AUDIO WORKER SCRIPT...");
-        const blob = new Blob([workerBlobCode], { type: 'application/javascript' });
-        aiWorker = new Worker(URL.createObjectURL(blob));
+        try {
+            logToTerminal("DOWNLOADING 4-BIT COMPRESSED MODEL (~40MB)...");
+            const blob = new Blob([workerBlobCode], { type: 'application/javascript' });
+            
+            // FIX: Explicitly passed the module format configuration dictionary flag to the constructor loop
+            aiWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
 
-        aiWorker.onmessage = (e) => {
-            const { type, text, message } = e.data;
-            if (type === 'ready') {
-                logToTerminal("COMPRESSED AI CORE SYNCED INDEPENDENTLY. READY.");
-                decoderBtn.textContent = "ENABLE AI WAVEFORM DECODER";
-                decoderBtn.disabled = false;
-            } else if (type === 'result') {
-                isAiWorkerBusy = false;
-                interimTextLine.textContent = isAiDecoderActive ? "[AI WAVEFORM ANALYSIS ACTIVE]" : "";
-                
-                const cleanText = text
-                    .replace(/\[.*?\]/g, "")
-                    .replace(/\(.*?\)/g, "")
-                    .replace(/[^a-zA-Z\s]/g, "")
-                    .trim()
-                    .toUpperCase();
+            aiWorker.onmessage = (e) => {
+                const { type, text, message } = e.data;
+                if (type === 'ready') {
+                    logToTerminal("AI CORE INSTANTIATED SYNCED IN BACKGROUND THREAD.");
+                    decoderBtn.textContent = "ENABLE AI WAVEFORM DECODER";
+                    decoderBtn.disabled = false;
+                    interimTextLine.textContent = "AI Core Ready.";
+                } else if (type === 'result') {
+                    isAiWorkerBusy = false;
+                    interimTextLine.textContent = isAiDecoderActive ? "[AI WAVEFORM ANALYSIS ACTIVE]" : "";
+                    
+                    const cleanText = text
+                        .replace(/\[.*?\]/g, "")
+                        .replace(/\(.*?\)/g, "")
+                        .replace(/[^a-zA-Z\s]/g, "")
+                        .trim()
+                        .toUpperCase();
 
-                if (cleanText.length > 2) {
-                    logToTerminal(`[AI]: ${cleanText}`, true);
+                    if (cleanText.length > 2) {
+                        logToTerminal(`[AI]: ${cleanText}`, true);
+                    }
+                } else if (type === 'error') {
+                    isAiWorkerBusy = false;
+                    decoderBtn.textContent = "AI INITIALIZATION FAILED";
+                    logToTerminal(`AI FAULT: ${message}`);
                 }
-            } else if (type === 'error') {
-                isAiWorkerBusy = false;
-                console.error("Worker engine hit an error:", message);
-            }
-        };
+            };
 
-        aiWorker.postMessage({ type: 'init' });
+            // Capture top-level uncaught thread errors to prevent silent loading freezes
+            aiWorker.onerror = (err) => {
+                decoderBtn.textContent = "AI SEC-BLOCK ERROR";
+                logToTerminal("THREAD BLOCK: Verify browser permits Blob workers.");
+                console.error(err);
+            };
+
+            aiWorker.postMessage({ type: 'init' });
+
+        } catch (setupError) {
+            decoderBtn.textContent = "AI ENGINE SETUP BLOCK";
+            logToTerminal(`CRITICAL ENV EXCEPTION: ${setupError.message}`);
+        }
     }
 
     function initAudioEngine() {
@@ -409,7 +422,7 @@
         lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
 
         analyserNode = audioContext.createAnalyser();
-        analyserNode.fftSize = 128; // Maintained lower canvas FFT overhead for mobile graphic frame rate safety
+        analyserNode.fftSize = 128; 
         audioDataArray = new Uint8Array(analyserNode.frequencyBinCount);
 
         hpFilter.connect(lpFilter);
@@ -425,13 +438,10 @@
             const inputData = e.inputBuffer.getChannelData(0);
             rawAudioAccumulator.push(...inputData);
 
-            // Accumulate 3 seconds worth of float data arrays
             const sampleCeiling = audioContext.sampleRate * 3;
             if (rawAudioAccumulator.length >= sampleCeiling) {
                 const chunkToProcess = new Float32Array(rawAudioAccumulator);
                 rawAudioAccumulator = []; 
-                
-                // Run local Speech Gate check before packing data blocks out to the worker thread
                 evaluateGateAndDispatch(chunkToProcess);
             }
         };
@@ -458,7 +468,6 @@
     }
 
     function evaluateGateAndDispatch(floatArray) {
-        // Delta-RMS Speech Gate Check
         const totalSamples = floatArray.length;
         const windowSize = Math.floor(totalSamples / 10);
         let rmsValues = [];
@@ -474,12 +483,10 @@
 
         const deltaRMS = Math.max(...rmsValues) - Math.min(...rmsValues);
 
-        // Gate evaluation threshold. If it passes, ship it off to the Web Worker thread.
         if (deltaRMS > 0.045 && isChannelAudioVoicing) {
             isAiWorkerBusy = true;
-            interimTextLine.textContent = "[BACKGROUND AI IS PARSING FRAME...]";
+            interimTextLine.textContent = "[PROCESSING AUDIO SPECTRUM...]";
             
-            // Pass array pointers straight out to background sandboxes
             aiWorker.postMessage({
                 type: 'process',
                 buffer: floatArray,
@@ -593,7 +600,7 @@
                 if (isSweeping) assignRandomStation(audioObj);
             });
 
-            assignRandomStation(audioObj);
+            assignRandom station(audioObj);
             audioPool.push(audioObj);
         }
     }
@@ -640,7 +647,7 @@
             decoderBtn.classList.add('active-decoding');
             interimTextLine.textContent = "[AI WAVEFORM ANALYSIS ACTIVE]";
             rawAudioAccumulator = [];
-            logToTerminal("AI WORKER ON: ROUTING COGNITIVE SUB-THREADS...");
+            logToTerminal("AI FILTER ONLINE: CAPTURING AUDIO FRACTION SEQUENCES...");
         }
     });
 
