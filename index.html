@@ -2,55 +2,214 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Aggressive Spirit Box Scan</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital SB7 Spirit Box</title>
     <style>
-        body { background: #000; color: #ff0000; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        button { background: #ff0000; color: #000; border: none; padding: 20px 40px; font-weight: bold; font-size: 1.5rem; cursor: pointer; }
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .device {
+            background: linear-gradient(145deg, #2a2a2a, #1f1f1f);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 10px 10px 30px #111, -10px -10px 30px #333;
+            width: 350px;
+            text-align: center;
+            border: 2px solid #333;
+        }
+        .lcd-screen {
+            background-color: #0a1a0a;
+            border: 4px solid #000;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: inset 0 0 15px rgba(0,255,0,0.2);
+            position: relative;
+        }
+        .station-display {
+            color: #4af626;
+            font-size: 1.5em;
+            font-weight: bold;
+            text-shadow: 0 0 5px #4af626;
+            margin: 10px 0;
+            min-height: 28px;
+        }
+        .status-text {
+            color: #2e8b18;
+            font-size: 0.9em;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        button {
+            background-color: #d32f2f;
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 5px 15px rgba(211, 47, 47, 0.4);
+            transition: background-color 0.2s;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button.active {
+            background-color: #388e3c;
+            box-shadow: 0 5px 15px rgba(56, 142, 60, 0.4);
+        }
+        .slider-container {
+            text-align: left;
+            background: #222;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        input[type=range] {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
-    <button id="scan-btn">SCAN</button>
-    <div id="status" style="margin-top: 20px;">READY</div>
+
+<div class="device">
+    <div class="lcd-screen">
+        <div class="status-text" id="status">STATUS: STANDBY</div>
+        <div class="station-display" id="station">-- CH --</div>
+        <div class="status-text" id="rate-display">SWEEP: 200ms</div>
+    </div>
+
+    <div class="controls">
+        <button id="power-btn">Power / Start Sweep</button>
+        
+        <div class="slider-container">
+            <label for="sweep-rate">Sweep Rate (<span id="rate-val">200</span>ms)</label>
+            <input type="range" id="sweep-rate" min="50" max="500" value="200" step="10">
+            <div class="slider-labels">
+                <span>50ms (Fast)</span>
+                <span>500ms (Slow)</span>
+            </div>
+        }
+        </div>
+    </div>
+</div>
 
 <script>
-    let audio = new Audio();
-    let isScanning = false;
-    let stations = [];
+    // Source: Publicly available, reliable internet radio streams (News, Talk, Music)
+    // Note: Streaming URLs change occasionally. These are standard public streams.
+    const streamURLs = [
+        "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service", 
+        "https://npr-ice.streamguys1.com/live.mp3",
+        "https://icecast.omroep.nl/radio1-bb-mp3",
+        "https://live.wpr.org/wpr-news-mp3-64",
+        "https://livenewschat.eu/audio"
+    ];
 
-    // Aggressive Clipping Logic
-    async function aggressiveScan() {
-        if (!isScanning) return;
-        
-        // Randomly pick a station and slice of audio
-        const station = stations[Math.floor(Math.random() * stations.length)];
-        audio.src = station.url_resolved;
-        audio.play().catch(() => {});
-        
-        // INTERRUPT: Cut the audio after 100ms to force the "Spirit Box" stutter
-        setTimeout(() => {
-            audio.pause();
-            audio.currentTime = 0; 
-        }, 100);
+    const audioElements = [];
+    let isSweeping = false;
+    let sweepInterval;
+    let currentRate = 200; // Default sweep rate
 
-        // Next slice
-        setTimeout(aggressiveScan, 150); 
+    const powerBtn = document.getElementById('power-btn');
+    const stationDisplay = document.getElementById('station');
+    const statusDisplay = document.getElementById('status');
+    const rateDisplay = document.getElementById('rate-display');
+    const sweepRateSlider = document.getElementById('sweep-rate');
+    const rateVal = document.getElementById('rate-val');
+
+    // Initialize Audio Elements
+    function setupAudio() {
+        streamURLs.forEach(url => {
+            const audio = new Audio(url);
+            audio.crossOrigin = "anonymous";
+            audio.volume = 0; // Start muted
+            audio.loop = true;
+            audioElements.push(audio);
+        });
     }
 
-    document.getElementById('scan-btn').addEventListener('click', async () => {
-        if (!isScanning) {
-            isScanning = true;
-            document.getElementById('scan-btn').textContent = "STOP";
-            if (stations.length === 0) {
-                const res = await fetch("https://de1.api.radio-browser.info/json/stations/search?limit=50&hidebroken=true&codec=mp3");
-                stations = await res.json();
-            }
-            aggressiveScan();
+    // The Non-Linear Sweep Engine
+    function sweepStations() {
+        if (!isSweeping) return;
+
+        // Mute all stations
+        audioElements.forEach(audio => audio.volume = 0);
+
+        // Pick a random station (Non-linear)
+        const randomIndex = Math.floor(Math.random() * audioElements.length);
+        const selectedAudio = audioElements[randomIndex];
+
+        // Unmute the selected station to create the "chop" effect
+        selectedAudio.volume = 1;
+
+        // Update UI
+        stationDisplay.innerText = `STREAM 0${randomIndex + 1}`;
+
+        // Set the next sweep trigger based on the current rate
+        sweepInterval = setTimeout(sweepStations, currentRate);
+    }
+
+    // Play/Pause Logic (Requires user gesture to start audio)
+    powerBtn.addEventListener('click', () => {
+        if (!isSweeping) {
+            isSweeping = true;
+            powerBtn.classList.add('active');
+            powerBtn.innerText = "Stop Sweep";
+            statusDisplay.innerText = "STATUS: SWEEPING";
+            statusDisplay.style.color = "#4af626";
+
+            // Start all streams silently to buffer
+            audioElements.forEach(audio => {
+                audio.play().catch(e => console.log("Buffering wait:", e));
+            });
+
+            sweepStations();
         } else {
-            isScanning = false;
-            document.getElementById('scan-btn').textContent = "SCAN";
-            audio.pause();
+            isSweeping = false;
+            clearTimeout(sweepInterval);
+            powerBtn.classList.remove('active');
+            powerBtn.innerText = "Power / Start Sweep";
+            statusDisplay.innerText = "STATUS: STANDBY";
+            statusDisplay.style.color = "#2e8b18";
+            stationDisplay.innerText = "-- CH --";
+
+            // Mute and pause all
+            audioElements.forEach(audio => {
+                audio.volume = 0;
+                audio.pause();
+            });
         }
     });
+
+    // Handle Sweep Rate Changes
+    sweepRateSlider.addEventListener('input', (e) => {
+        currentRate = parseInt(e.target.value);
+        rateVal.innerText = currentRate;
+        rateDisplay.innerText = `SWEEP: ${currentRate}ms`;
+    });
+
+    // Initialize on load
+    setupAudio();
+
 </script>
 </body>
 </html>
