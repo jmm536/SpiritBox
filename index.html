@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Unified AI Engine)</title>
+    <title>Internet Radio Spirit Box (Unbrickable AI Engine)</title>
     <style>
         body {
             background-color: #121212;
@@ -152,12 +152,12 @@
         }
     </style>
 
-    <script src="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
 </head>
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v4.4 // UNIFIED-AI</h1>
+    <h1>IP-SPIRIT BOX v4.5 // HARDENED AI</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -174,7 +174,7 @@
 
     <div class="controls">
         <button id="start-btn">START SWEEP</button>
-        <button id="decoder-btn" disabled>LOADING COMPRESSED AI...</button>
+        <button id="decoder-btn" disabled>AWAITING INLINE AI LINK...</button>
         
         <div class="control-group">
             <div class="control-row">
@@ -304,32 +304,33 @@
         terminalLog.insertBefore(newLine, interimTextLine.nextSibling);
     }
 
-    // Unified AI Initialization Logic
-    async function initUnifiedAiEngine() {
+    // Hardened, Flattened AI Initialization
+    async function initHardenenedAiEngine() {
         try {
-            if (!window.hf || !window.hf.transformers) {
-                // Fail-safe checker loop if script tag load timing drops frames
-                setTimeout(initUnifiedAiEngine, 500);
+            // Target the script tag global namespace context directly
+            if (!window.Xenova || !window.Xenova.pipeline) {
+                setTimeout(initHardenenedAiEngine, 200);
                 return;
             }
             
-            logToTerminal("DOWNLOADING 4-BIT WHISPER MODEL (~35MB)...");
-            const { pipeline, env } = window.hf.transformers;
+            decoderBtn.textContent = "DOWNLOADING AI MODEL (~75MB)...";
+            logToTerminal("DOWNLOADING COMPRESSED SPEECH NETWORK PARALLEL MODEL...");
             
+            const { pipeline, env } = window.Xenova;
             env.allowLocalModels = false;
 
-            // Instantiate optimized speech pipeline structure directly
+            // Instantiates model structure cleanly across standard environments
             whisperTranscriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
-                dtype: 'q4' // Forces ultra-fast, low-memory 4-bit integer processing
+                quantized: true
             });
 
-            logToTerminal("AI WAVEFORM PIPELINE SYNCED AND READY.");
+            logToTerminal("AI WAVEFORM NETWORK INITIALIZED AND ONLINE.");
             decoderBtn.textContent = "ENABLE AI WAVEFORM DECODER";
             decoderBtn.disabled = false;
             interimTextLine.textContent = "AI Core Ready.";
         } catch (err) {
             decoderBtn.textContent = "AI INITIALIZATION FAILED";
-            logToTerminal(`ERROR: ${err.message}`);
+            logToTerminal(`ERROR CHECK: ${err.message}`);
         }
     }
 
@@ -363,12 +364,12 @@
             const inputData = e.inputBuffer.getChannelData(0);
             rawAudioAccumulator.push(...inputData);
 
-            const sampleCeiling = audioContext.sampleRate * 3; // 3-Second capture frames
+            // MOBILE SPEED UPGRADE: Tightened the window to 2-second sampling blocks
+            const sampleCeiling = audioContext.sampleRate * 2; 
             if (rawAudioAccumulator.length >= sampleCeiling) {
                 const chunkToProcess = new Float32Array(rawAudioAccumulator);
                 rawAudioAccumulator = []; 
                 
-                // Deferred check ensures main rendering threads don't hitch
                 setTimeout(() => evaluateGateAndDispatch(chunkToProcess), 0);
             }
         };
@@ -412,12 +413,10 @@
 
         const deltaRMS = Math.max(...rmsValues) - Math.min(...rmsValues);
 
-        // Speech Variance Filter Gate
         if (deltaRMS > 0.045 && isChannelAudioVoicing) {
             isAiEngineBusy = true;
-            interimTextLine.textContent = "[PROCESSING AUDIO SPECTRUM...]";
+            interimTextLine.textContent = "[PROCESSING WAVEFORM...]";
             
-            // Asynchronous Execution Window Allocation
             setTimeout(async () => {
                 try {
                     const downsampled = downsample(floatArray, audioContext.sampleRate);
@@ -450,218 +449,4 @@
     function downsample(buffer, inputSampleRate) {
         const targetSampleRate = 16000;
         if (inputSampleRate === targetSampleRate) return buffer;
-        const ratio = inputSampleRate / targetSampleRate;
-        const newLength = Math.round(buffer.length / ratio);
-        const result = new Float32Array(newLength);
-        let offsetResult = 0, offsetBuffer = 0;
-        while (offsetResult < result.length) {
-            let nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
-            let accum = 0, count = 0;
-            for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
-                accum += buffer[i]; count++;
-            }
-            result[offsetResult] = accum / count;
-            offsetResult++; offsetBuffer = nextOffsetBuffer;
-        }
-        return result;
-    }
-
-    function renderScopeLoop() {
-        requestAnimationFrame(renderScopeLoop);
-        
-        const width = canvas.width;
-        const height = canvas.height;
-        
-        canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        canvasCtx.fillRect(0, 0, width, height);
-
-        if (analyserNode) {
-            analyserNode.getByteTimeDomainData(audioDataArray);
-        }
-
-        canvasCtx.lineWidth = 2.0;
-        canvasCtx.strokeStyle = '#00ff66';
-        canvasCtx.beginPath();
-
-        const bufferLength = audioDataArray ? audioDataArray.length : 64;
-        const sliceWidth = width / (bufferLength - 1);
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-            let v = audioDataArray ? (audioDataArray[i] / 128.0) - 1.0 : 0.0;
-
-            if (isSweeping && isChannelAudioVoicing) {
-                let norm = i / (bufferLength - 1);
-                let centerEnvelope = Math.sin(norm * Math.PI); 
-                let organicWave = Math.sin(norm * 2.0 + Date.now() * 0.04) * 0.5;
-                v += centerEnvelope * organicWave;
-            }
-
-            v = Math.max(-0.90, Math.min(0.90, v));
-            let y = (height / 2) + (v * (height / 2));
-
-            if (i === 0) canvasCtx.moveTo(x, y);
-            else canvasCtx.lineTo(x, y);
-            x += sliceWidth;
-        }
-
-        if (!isSweeping && (!audioContext || audioContext.state !== 'running')) {
-            canvasCtx.moveTo(0, height / 2);
-            canvasCtx.lineTo(width, height / 2);
-        }
-        canvasCtx.stroke();
-    }
-
-    async function fetchStations() {
-        try {
-            const chosenLang = langSelect.value;
-            let finalUrl = BASE_API_URL;
-            if (chosenLang !== "all") finalUrl += `&language=${chosenLang}`;
-
-            const response = await fetch(finalUrl);
-            let rawStations = await response.json();
-            
-            let filteredCORS = rawStations.filter(s => s.has_cors === true || s.has_cors === 1 || s.has_cors === "1");
-            if (filteredCORS.length > 5) {
-                rawStations = filteredCORS;
-            }
-
-            const isHttpsMode = window.location.protocol === 'https:';
-            if (isHttpsMode) {
-                stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
-            } else {
-                stations = rawStations;
-            }
-            statusLog.textContent = `Indexed ${stations.length} mobile-ready channels.`;
-        } catch (error) {
-            console.error(error);
-            statusLog.textContent = "Directory sync failure. Retrying...";
-            setTimeout(fetchStations, 5000);
-        }
-    }
-
-    function assignRandomStation(audioObj) {
-        if (!stations.length) return;
-        const randomTarget = stations[Math.floor(Math.random() * stations.length)];
-        
-        audioObj.element.src = randomTarget.url_resolved || randomTarget.url;
-        audioObj.element.stationData = randomTarget;
-        audioObj.element.volume = 0;
-        
-        audioObj.element.play().catch(() => {});
-    }
-
-    function buildAudioPool() {
-        if (audioPool.length > 0) return;
-
-        for (let i = 0; i < POOL_SIZE; i++) {
-            const audioEl = new Audio();
-            audioEl.preload = "auto";
-            audioEl.crossOrigin = "anonymous"; 
-            
-            const sourceNode = audioContext.createMediaElementSource(audioEl);
-            sourceNode.connect(hpFilter);
-
-            const audioObj = {
-                element: audioEl,
-                sourceNode: sourceNode
-            };
-
-            audioEl.addEventListener('error', () => {
-                if (isSweeping) assignRandomStation(audioObj);
-            });
-
-            assignRandomStation(audioObj);
-            audioPool.push(audioObj);
-        }
-    }
-
-    function executeSweep() {
-        if (!isSweeping) return;
-
-        if (activeAudio) {
-            activeAudio.element.volume = 0;
-            if (Math.random() < 0.50) {
-                assignRandomStation(activeAudio);
-            }
-        }
-
-        activeAudio = audioPool[Math.floor(Math.random() * audioPool.length)];
-
-        if (activeAudio.element.readyState >= 2 && !activeAudio.element.error && !activeAudio.element.paused) {
-            activeAudio.element.volume = 1.0; 
-            isChannelAudioVoicing = true; 
-
-            const cleanName = activeAudio.element.stationData.name.trim().toUpperCase().substring(0, 20);
-            stationNameDiv.textContent = cleanName || "UNKNOWN BAND";
-            stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // ${activeAudio.element.stationData.countrycode || 'GLOBAL'}`;
-        } else {
-            isChannelAudioVoicing = false; 
-            stationNameDiv.textContent = "--- TUNING ---";
-            stationInfoDiv.textContent = `SCANNING MULTIPLEX BANDS...`;
-        }
-
-        sweepTimeout = setTimeout(executeSweep, parseInt(sweepRateInput.value));
-    }
-
-    decoderBtn.addEventListener('click', () => {
-        if (!whisperTranscriber) return;
-
-        if (isAiDecoderActive) {
-            isAiDecoderActive = false;
-            decoderBtn.textContent = "ENABLE AI WAVEFORM DECODER";
-            decoderBtn.classList.remove('active-decoding');
-            interimTextLine.textContent = '';
-            rawAudioAccumulator = [];
-            logToTerminal("AI LOGIC DISENGAGED.");
-        } else {
-            isAiDecoderActive = true;
-            decoderBtn.textContent = "DISENGAGE AI DECODER";
-            decoderBtn.classList.add('active-decoding');
-            interimTextLine.textContent = "[AI WAVEFORM ANALYSIS ACTIVE]";
-            rawAudioAccumulator = [];
-            logToTerminal("AI FILTER ONLINE: CAPTURING WAVEFORM FRAGMENTS...");
-        }
-    });
-
-    startBtn.addEventListener('click', async () => {
-        if (!audioContext) {
-            initAudioEngine();
-        }
-        
-        if (isSweeping) {
-            isSweeping = false;
-            isChannelAudioVoicing = false;
-            clearTimeout(sweepTimeout);
-            audioPool.forEach(a => a.element.volume = 0);
-            if (activeAudio) activeAudio.element.volume = 0;
-            
-            if (audioContext && audioContext.state === 'running') {
-                await audioContext.suspend();
-            }
-            
-            startBtn.textContent = "START SWEEP";
-            stationNameDiv.textContent = "SWEEP HALTED";
-            stationInfoDiv.textContent = "SYSTEM STANDBY";
-        } else {
-            if (stations.length === 0) {
-                statusLog.textContent = "Awaiting network link...";
-                return;
-            }
-            if (audioContext && audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-            buildAudioPool();
-            isSweeping = true;
-            startBtn.textContent = "STOP SWEEP";
-            executeSweep();
-        }
-    });
-
-    fetchStations();
-    setTimeout(initUnifiedAiEngine, 500);
-    renderScopeLoop();
-</script>
-
-</body>
-</html>
+        const ratio =
