@@ -5,211 +5,184 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital SB7 Spirit Box</title>
     <style>
-        body {
-            background-color: #1a1a1a;
-            color: #fff;
-            font-family: 'Courier New', Courier, monospace;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .device {
-            background: linear-gradient(145deg, #2a2a2a, #1f1f1f);
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 10px 10px 30px #111, -10px -10px 30px #333;
-            width: 350px;
-            text-align: center;
-            border: 2px solid #333;
-        }
-        .lcd-screen {
-            background-color: #0a1a0a;
-            border: 4px solid #000;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: inset 0 0 15px rgba(0,255,0,0.2);
-            position: relative;
-        }
-        .station-display {
-            color: #4af626;
-            font-size: 1.5em;
-            font-weight: bold;
-            text-shadow: 0 0 5px #4af626;
-            margin: 10px 0;
-            min-height: 28px;
-        }
-        .status-text {
-            color: #2e8b18;
-            font-size: 0.9em;
-        }
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        button {
-            background-color: #d32f2f;
-            color: white;
-            border: none;
-            padding: 15px;
-            font-size: 1.2em;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            text-transform: uppercase;
-            box-shadow: 0 5px 15px rgba(211, 47, 47, 0.4);
-            transition: background-color 0.2s;
-        }
-        button:active {
-            transform: scale(0.98);
-        }
-        button.active {
-            background-color: #388e3c;
-            box-shadow: 0 5px 15px rgba(56, 142, 60, 0.4);
-        }
-        .slider-container {
-            text-align: left;
-            background: #222;
-            padding: 15px;
-            border-radius: 8px;
-        }
-        input[type=range] {
-            width: 100%;
-            margin-top: 10px;
-        }
-        .slider-labels {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8em;
-            color: #888;
-            margin-top: 5px;
-        }
+        body { background-color: #1a1a1a; color: #fff; font-family: 'Courier New', Courier, monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; padding: 20px 0; box-sizing: border-box; overflow-y: auto; }
+        .device { background: linear-gradient(145deg, #2a2a2a, #1f1f1f); padding: 30px; border-radius: 15px; box-shadow: 10px 10px 30px #111, -10px -10px 30px #333; width: 380px; text-align: center; border: 2px solid #333; margin: auto; }
+        .lcd-screen { background-color: #0a1a0a; border: 4px solid #000; border-radius: 8px; padding: 20px; margin-bottom: 25px; box-shadow: inset 0 0 15px rgba(0,255,0,0.2); position: relative; overflow: hidden; }
+        #waveform-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.5; pointer-events: none; }
+        .station-display { color: #4af626; font-size: 1.5em; font-weight: bold; text-shadow: 0 0 5px #4af626; margin: 10px 0; min-height: 28px; word-wrap: break-word; position: relative; z-index: 2; }
+        .status-text { color: #2e8b18; font-size: 0.9em; position: relative; z-index: 2; }
+        .controls { display: flex; flex-direction: column; gap: 15px; }
+        button { background-color: #d32f2f; color: white; border: none; padding: 15px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; text-transform: uppercase; box-shadow: 0 5px 15px rgba(211, 47, 47, 0.4); transition: background-color 0.2s; }
+        button.active { background-color: #388e3c; box-shadow: 0 5px 15px rgba(56, 142, 60, 0.4); }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        .control-group { text-align: left; background: #222; padding: 12px; border-radius: 8px; border: 1px solid #333; }
+        .control-group label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9em; color: #ccc; }
+        .control-group label span { color: #4af626; font-weight: bold; }
+        .checkbox-group { display: flex; justify-content: space-between; align-items: center; background: #222; padding: 12px; border-radius: 8px; border: 1px solid #333; }
+        .checkbox-group label { font-size: 0.9em; color: #ccc; margin: 0; }
+        input[type=checkbox] { width: 20px; height: 20px; accent-color: #d32f2f; cursor: pointer; }
+        select, input[type=range] { width: 100%; padding: 6px; background: #111; color: #4af626; border: 1px solid #444; border-radius: 4px; font-family: inherit; }
+        input[type=range] { padding: 0; margin-top: 5px; }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.7em; color: #888; margin-top: 5px; }
     </style>
 </head>
 <body>
-
-<div class="device">
-    <div class="lcd-screen">
-        <div class="status-text" id="status">STATUS: STANDBY</div>
-        <div class="station-display" id="station">-- CH --</div>
-        <div class="status-text" id="rate-display">SWEEP: 200ms</div>
-    </div>
-
-    <div class="controls">
-        <button id="power-btn">Power / Start Sweep</button>
-        
-        <div class="slider-container">
-            <label for="sweep-rate">Sweep Rate (<span id="rate-val">200</span>ms)</label>
-            <input type="range" id="sweep-rate" min="50" max="500" value="200" step="10">
-            <div class="slider-labels">
-                <span>50ms (Fast)</span>
-                <span>500ms (Slow)</span>
+    <div class="device">
+        <div class="lcd-screen">
+            <canvas id="waveform-canvas"></canvas>
+            <div class="status-text" id="status">STATUS: STANDBY</div>
+            <div class="station-display" id="station">-- CH --</div>
+            <div class="status-text" id="rate-display">SWEEP: 200ms</div>
+        </div>
+        <div class="controls">
+            <button id="power-btn">Power / Start</button>
+            <div class="control-group">
+                <label for="static-vol">Static Volume: <span id="static-val">5%</span></label>
+                <input type="range" id="static-vol" min="0" max="100" value="5">
             </div>
-        }
+            <div class="control-group">
+                <label for="master-bass">Bass: <span id="bass-val">0dB</span></label>
+                <input type="range" id="master-bass" min="-20" max="20" value="0" step="1">
+            </div>
+            <div class="control-group">
+                <label for="master-treble">Treble: <span id="treble-val">0dB</span></label>
+                <input type="range" id="master-treble" min="-20" max="20" value="0" step="1">
+            </div>
+            <div class="checkbox-group">
+                <label for="effect-isolation">Voice Isolation (Bandpass)</label>
+                <input type="checkbox" id="effect-isolation">
+            </div>
+            <div class="control-group">
+                <label for="effect-echo">Echo: <span id="echo-val">0%</span></label>
+                <input type="range" id="effect-echo" min="0" max="100" value="0">
+            </div>
+            <div class="control-group">
+                <label for="pool-size">Channel Pool Size:</label>
+                <select id="pool-size">
+                    <option value="50">50 Channels</option>
+                    <option value="100">100 Channels</option>
+                    <option value="200" selected>200 Channels</option>
+                    <option value="350">350 Channels</option>
+                    <option value="500">500 Channels</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="language-filter">Station Language Pool:</label>
+                <select id="language-filter">
+                    <option value="all">All Languages</option>
+                    <option value="english" selected>English Only</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="sweep-rate">Sweep Rate: <span id="rate-val">200ms</span></label>
+                <input type="range" id="sweep-rate" min="50" max="500" value="200" step="10">
+                <div class="slider-labels"><span>Fast</span><span>Slow</span></div>
+            </div>
         </div>
     </div>
-</div>
+    <script>
+        let audioElements = [], isSweeping = false, isLoading = false, sweepInterval, audioCtx, bassFilter, trebleFilter, bandpassNode, delayNode, feedbackGainNode, wetGainNode, dryGainNode, staticGainNode, staticBufferSource, analyser, masterGainNode;
+        const powerBtn = document.getElementById('power-btn'), stationDisplay = document.getElementById('station'), statusDisplay = document.getElementById('status'), rateDisplay = document.getElementById('rate-display'), sweepRateSlider = document.getElementById('sweep-rate'), rateVal = document.getElementById('rate-val'), languageFilter = document.getElementById('language-filter'), poolSizeSelect = document.getElementById('pool-size'), staticVolSlider = document.getElementById('static-vol'), staticValText = document.getElementById('static-val'), bassSlider = document.getElementById('master-bass'), bassValText = document.getElementById('bass-val'), trebleSlider = document.getElementById('master-treble'), trebleValText = document.getElementById('treble-val'), isolationToggle = document.getElementById('effect-isolation'), echoSlider = document.getElementById('effect-echo'), echoValText = document.getElementById('echo-val'), canvas = document.getElementById('waveform-canvas'), canvasCtx = canvas.getContext('2d');
 
-<script>
-    // Source: Publicly available, reliable internet radio streams (News, Talk, Music)
-    // Note: Streaming URLs change occasionally. These are standard public streams.
-    const streamURLs = [
-        "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service", 
-        "https://npr-ice.streamguys1.com/live.mp3",
-        "https://icecast.omroep.nl/radio1-bb-mp3",
-        "https://live.wpr.org/wpr-news-mp3-64",
-        "https://livenewschat.eu/audio"
-    ];
+        function initWebAudioEngine() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGainNode = audioCtx.createGain(); masterGainNode.gain.value = 1.5;
+                bassFilter = audioCtx.createBiquadFilter(); bassFilter.type = 'lowshelf'; bassFilter.frequency.value = 250; bassFilter.gain.value = parseInt(bassSlider.value);
+                trebleFilter = audioCtx.createBiquadFilter(); trebleFilter.type = 'highshelf'; trebleFilter.frequency.value = 4000; trebleFilter.gain.value = parseInt(trebleSlider.value);
+                bandpassNode = audioCtx.createBiquadFilter(); bandpassNode.type = 'allpass'; bandpassNode.frequency.value = 1200; bandpassNode.Q.value = 1.5;
+                delayNode = audioCtx.createDelay(2.0); delayNode.delayTime.value = 0.4; feedbackGainNode = audioCtx.createGain(); feedbackGainNode.gain.value = 0.0; wetGainNode = audioCtx.createGain(); wetGainNode.gain.value = 0.0; dryGainNode = audioCtx.createGain(); dryGainNode.gain.value = 1.0;
+                analyser = audioCtx.createAnalyser(); analyser.fftSize = 2048;
+                bassFilter.connect(trebleFilter); trebleFilter.connect(bandpassNode); bandpassNode.connect(dryGainNode); bandpassNode.connect(delayNode); delayNode.connect(feedbackGainNode); feedbackGainNode.connect(delayNode); delayNode.connect(wetGainNode); dryGainNode.connect(analyser); wetGainNode.connect(analyser); analyser.connect(masterGainNode); masterGainNode.connect(audioCtx.destination);
+                staticGainNode = audioCtx.createGain(); staticGainNode.gain.value = parseInt(staticVolSlider.value) / 100; staticGainNode.connect(bassFilter);
+                const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0); for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
+                staticBufferSource = audioCtx.createBufferSource(); staticBufferSource.buffer = noiseBuffer; staticBufferSource.loop = true; staticBufferSource.connect(staticGainNode); staticBufferSource.start();
+                drawWaveform();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
 
-    const audioElements = [];
-    let isSweeping = false;
-    let sweepInterval;
-    let currentRate = 200; // Default sweep rate
+        function triggerChannelClick() {
+            if(!audioCtx) return;
+            const bufferSize = audioCtx.sampleRate * 0.05;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for(let i=0; i<bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 2000;
+            
+            const gain = audioCtx.createGain();
+            // Increased initial gain for a louder tick
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime); 
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+            
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(masterGainNode);
+            noise.start();
+        }
 
-    const powerBtn = document.getElementById('power-btn');
-    const stationDisplay = document.getElementById('station');
-    const statusDisplay = document.getElementById('status');
-    const rateDisplay = document.getElementById('rate-display');
-    const sweepRateSlider = document.getElementById('sweep-rate');
-    const rateVal = document.getElementById('rate-val');
+        async function fetchRandomStations(language, limit) {
+            try {
+                let apiUrl = `https://de1.api.radio-browser.info/json/stations/search?limit=${limit}&order=random&hidebroken=true${language === 'english' ? '&language=english' : ''}`;
+                const response = await fetch(apiUrl); const stations = await response.json();
+                return stations.map(s => s.url_resolved);
+            } catch (e) { return ["https://stream.live.vc.bbcmedia.co.uk/bbc_world_service"]; }
+        }
 
-    // Initialize Audio Elements
-    function setupAudio() {
-        streamURLs.forEach(url => {
-            const audio = new Audio(url);
-            audio.crossOrigin = "anonymous";
-            audio.volume = 0; // Start muted
-            audio.loop = true;
-            audioElements.push(audio);
-        });
-    }
-
-    // The Non-Linear Sweep Engine
-    function sweepStations() {
-        if (!isSweeping) return;
-
-        // Mute all stations
-        audioElements.forEach(audio => audio.volume = 0);
-
-        // Pick a random station (Non-linear)
-        const randomIndex = Math.floor(Math.random() * audioElements.length);
-        const selectedAudio = audioElements[randomIndex];
-
-        // Unmute the selected station to create the "chop" effect
-        selectedAudio.volume = 1;
-
-        // Update UI
-        stationDisplay.innerText = `STREAM 0${randomIndex + 1}`;
-
-        // Set the next sweep trigger based on the current rate
-        sweepInterval = setTimeout(sweepStations, currentRate);
-    }
-
-    // Play/Pause Logic (Requires user gesture to start audio)
-    powerBtn.addEventListener('click', () => {
-        if (!isSweeping) {
-            isSweeping = true;
-            powerBtn.classList.add('active');
-            powerBtn.innerText = "Stop Sweep";
-            statusDisplay.innerText = "STATUS: SWEEPING";
-            statusDisplay.style.color = "#4af626";
-
-            // Start all streams silently to buffer
-            audioElements.forEach(audio => {
-                audio.play().catch(e => console.log("Buffering wait:", e));
-            });
-
-            sweepStations();
-        } else {
-            isSweeping = false;
-            clearTimeout(sweepInterval);
-            powerBtn.classList.remove('active');
-            powerBtn.innerText = "Power / Start Sweep";
-            statusDisplay.innerText = "STATUS: STANDBY";
-            statusDisplay.style.color = "#2e8b18";
-            stationDisplay.innerText = "-- CH --";
-
-            // Mute and pause all
-            audioElements.forEach(audio => {
-                audio.volume = 0;
-                audio.pause();
+        function setupAudioPool(urls) {
+            destroyAudioPool();
+            urls.forEach(url => {
+                const audio = new Audio(url); audio.crossOrigin = "anonymous"; audio.volume = 0; audio.loop = true;
+                try { const source = audioCtx.createMediaElementSource(audio); source.connect(bassFilter); } catch (e) {}
+                audioElements.push(audio);
             });
         }
-    });
 
-    // Handle Sweep Rate Changes
-    sweepRateSlider.addEventListener('input', (e) => {
-        currentRate = parseInt(e.target.value);
-        rateVal.innerText = currentRate;
-        rateDisplay.innerText = `SWEEP: ${currentRate}ms`;
-    });
+        function destroyAudioPool() { audioElements.forEach(a => { a.pause(); a.removeAttribute('src'); a.load(); }); audioElements = []; }
 
-    // Initialize on load
-    setupAudio();
+        function drawWaveform() {
+            if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
+            requestAnimationFrame(drawWaveform);
+            if (!analyser || !isSweeping) { canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.beginPath(); canvasCtx.moveTo(0, canvas.height/2); canvasCtx.lineTo(canvas.width, canvas.height/2); canvasCtx.strokeStyle = 'rgba(46,139,24,0.5)'; canvasCtx.stroke(); return; }
+            const dataArray = new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(dataArray);
+            let maxD = 0; for(let i=0; i<dataArray.length; i++) maxD = Math.max(maxD, Math.abs(dataArray[i]-128));
+            canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.strokeStyle = (maxD/128 > (parseInt(staticVolSlider.value)/100 + 0.15)) ? 'rgba(255,50,50,0.9)' : 'rgba(74,246,38,0.7)'; canvasCtx.beginPath();
+            for (let i = 0; i < dataArray.length; i++) { const v = dataArray[i]/128.0; canvasCtx.lineTo(i * (canvas.width/dataArray.length), v * canvas.height/2); }
+            canvasCtx.stroke();
+        }
 
-</script>
+        function sweepStations() {
+            if (!isSweeping) return;
+            audioElements.forEach(a => a.volume = 0);
+            const sel = audioElements[Math.floor(Math.random() * audioElements.length)];
+            if(sel) { sel.volume = 1; triggerChannelClick(); }
+            stationDisplay.innerText = `POOL CH ${audioElements.indexOf(sel) + 1}`;
+            sweepInterval = setTimeout(sweepStations, parseInt(sweepRateSlider.value));
+        }
+
+        powerBtn.addEventListener('click', async () => {
+            if (isLoading) return;
+            if (!isSweeping) {
+                isLoading = true; initWebAudioEngine(); staticGainNode.gain.value = parseInt(staticVolSlider.value) / 100;
+                const urls = await fetchRandomStations(languageFilter.value, parseInt(poolSizeSelect.value));
+                setupAudioPool(urls); audioElements.forEach(a => a.play().catch(()=>{}));
+                isSweeping = true; isLoading = false; powerBtn.classList.add('active'); powerBtn.innerText = "Stop Sweep"; statusDisplay.innerText = "STATUS: SWEEPING"; statusDisplay.style.color = "#4af626"; languageFilter.disabled = poolSizeSelect.disabled = true; sweepStations();
+            } else {
+                isSweeping = false; clearTimeout(sweepInterval); powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY"; statusDisplay.style.color = "#2e8b18"; stationDisplay.innerText = "-- CH --"; languageFilter.disabled = poolSizeSelect.disabled = false; if(staticGainNode) staticGainNode.gain.value = 0; destroyAudioPool();
+            }
+        });
+        sweepRateSlider.oninput = (e) => { rateVal.innerText = e.target.value + "ms"; rateDisplay.innerText = `SWEEP: ${e.target.value}ms`; };
+        staticVolSlider.oninput = (e) => { staticValText.innerText = e.target.value + "%"; if(staticGainNode && isSweeping) staticGainNode.gain.value = e.target.value / 100; };
+        bassSlider.oninput = (e) => { bassValText.innerText = (e.target.value > 0 ? "+" : "") + e.target.value + "dB"; if(bassFilter) bassFilter.gain.value = e.target.value; };
+        trebleSlider.oninput = (e) => { trebleValText.innerText = (e.target.value > 0 ? "+" : "") + e.target.value + "dB"; if(trebleFilter) trebleFilter.gain.value = e.target.value; };
+        isolationToggle.onchange = (e) => { if(bandpassNode) bandpassNode.type = e.target.checked ? 'bandpass' : 'allpass'; };
+        echoSlider.oninput = (e) => { echoValText.innerText = e.target.value + "%"; if(wetGainNode && feedbackGainNode) { wetGainNode.gain.value = (e.target.value / 100) * 0.7; feedbackGainNode.gain.value = (e.target.value / 100) * 0.6; } };
+    </script>
 </body>
 </html>
