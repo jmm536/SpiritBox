@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Blind Sweep Engine)</title>
+    <title>Internet Radio Spirit Box (Hybrid Engine)</title>
     <style>
         body {
             background-color: #121212;
@@ -109,7 +109,7 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v3.2 // BLIND SWEEP</h1>
+    <h1>IP-SPIRIT BOX v3.3 // HYBRID</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
@@ -125,7 +125,7 @@
             </div>
             <select id="lang-select">
                 <option value="all">All Global Languages (Random Mix)</option>
-                <option value="english">English Only</option>
+                <option value="english" selected>English Only</option>
             </select>
         </div>
 
@@ -138,30 +138,30 @@
 
         <div class="control-group">
             <div class="control-row">
-                <label for="formant-shift">Formant Shifter Resonance: <strong><span id="formant-val">Neutral</span></strong></label>
+                <label for="formant-shift">Static Formant Shifter: <strong><span id="formant-val">Neutral</span></strong></label>
             </div>
             <input type="range" id="formant-shift" min="0" max="100" value="50">
         </div>
 
         <div class="control-group">
             <div class="control-row">
-                <label for="bass-cut">Tone: Bass Cut (High-Pass Filter): <strong><span id="bass-val">20</span> Hz</strong></label>
+                <label for="bass-cut">Static Bass Cut (High-Pass): <strong><span id="bass-val">150</span> Hz</strong></label>
             </div>
-            <input type="range" id="bass-cut" min="20" max="1200" step="10" value="20">
+            <input type="range" id="bass-cut" min="20" max="1200" step="10" value="150">
         </div>
 
         <div class="control-group">
             <div class="control-row">
-                <label for="treble-cut">Tone: Treble Cut (Low-Pass Filter): <strong><span id="treble-val">20.0</span> kHz</strong></label>
+                <label for="treble-cut">Static Treble Cut (Low-Pass): <strong><span id="treble-val">8.0</span> kHz</strong></label>
             </div>
-            <input type="range" id="treble-cut" min="1000" max="20000" step="250" value="20000">
+            <input type="range" id="treble-cut" min="1000" max="20000" step="250" value="8000">
         </div>
 
         <div class="control-group">
             <div class="control-row">
-                <label for="static-vol">Radio Static Volume: <strong><span id="static-val">20</span>%</strong></label>
+                <label for="static-vol">Radio Static Volume: <strong><span id="static-val">25</span>%</strong></label>
             </div>
-            <input type="range" id="static-vol" min="0" max="100" value="20">
+            <input type="range" id="static-vol" min="0" max="100" value="25">
         </div>
     </div>
 
@@ -201,69 +201,4 @@
     const staticVal = document.getElementById('static-val');
     const stationNameDiv = document.getElementById('station-name');
     const stationInfoDiv = document.getElementById('station-info');
-    const statusLog = document.getElementById('status-log');
-
-    sweepRateInput.addEventListener('input', () => rateVal.textContent = sweepRateInput.value);
-    
-    bassInput.addEventListener('input', () => {
-        bassVal.textContent = bassInput.value;
-        if (hpFilter) hpFilter.frequency.setValueAtTime(parseFloat(bassInput.value), audioContext.currentTime);
-    });
-
-    trebleInput.addEventListener('input', () => {
-        trebleVal.textContent = (trebleInput.value / 1000).toFixed(1);
-        if (lpFilter) lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
-    });
-
-    staticVolInput.addEventListener('input', () => {
-        staticVal.textContent = staticVolInput.value;
-        if (staticGain) staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.10, audioContext.currentTime);
-    });
-
-    formantInput.addEventListener('input', () => {
-        const val = parseInt(formantInput.value);
-        if (val < 35) formantVal.textContent = "Deep (Ooo)";
-        else if (val > 65) formantVal.textContent = "Bright (Eee)";
-        else formantVal.textContent = "Neutral";
-        updateFormantFrequencies(val);
-    });
-
-    langSelect.addEventListener('change', async () => {
-        statusLog.textContent = "Reloading station directory filters...";
-        await fetchStations();
-        if (isSweeping && audioPool.length > 0) {
-            audioPool.forEach(audioObj => assignRandomStation(audioObj));
-        }
-    });
-
-    function updateFormantFrequencies(sliderValue) {
-        if (!formantFilterL || !formantFilterH) return;
-        const pct = sliderValue / 100;
-        const lowF = 350 + (pct * 450);    
-        const highF = 900 + (pct * 1900);  
-        formantFilterL.frequency.setValueAtTime(lowF, audioContext.currentTime);
-        formantFilterH.frequency.setValueAtTime(highF, audioContext.currentTime);
-    }
-
-    function initAudioEngine() {
-        if (audioContext) return;
-        
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        hpFilter = audioContext.createBiquadFilter();
-        hpFilter.type = "highpass";
-        hpFilter.frequency.setValueAtTime(parseFloat(bassInput.value), audioContext.currentTime);
-
-        lpFilter = audioContext.createBiquadFilter();
-        lpFilter.type = "lowpass";
-        lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
-
-        formantFilterL = audioContext.createBiquadFilter();
-        formantFilterL.type = "peaking";
-        formantFilterL.Q.setValueAtTime(7.0, audioContext.currentTime);
-        formantFilterL.gain.setValueAtTime(14, audioContext.currentTime);
-
-        formantFilterH = audioContext.createBiquadFilter();
-        formantFilterH.type = "peaking";
-        formantFilterH.Q.setValueAtTime(7.0, audioContext.currentTime);
-        formantFilterH.
+    const statusLog = document.getElementById('status-log
