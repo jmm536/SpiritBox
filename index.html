@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Radio Spirit Box (Static Fixed)</title>
+    <title>Internet Radio Spirit Box (DSP Processing Engine)</title>
     <style>
         body {
             background-color: #121212;
@@ -20,18 +20,18 @@
         }
         .container {
             border: 2px solid #00ff66;
-            padding: 30px;
+            padding: 25px;
             background-color: #1a1a1a;
             box-shadow: 0 0 20px rgba(0, 255, 102, 0.2);
             border-radius: 8px;
             width: 100%;
-            max-width: 500px;
+            max-width: 520px;
         }
         h1 {
             text-align: center;
             margin-top: 0;
             text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             letter-spacing: 2px;
         }
         .display {
@@ -52,16 +52,17 @@
         .controls {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 15px;
         }
         .control-group {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 6px;
         }
         .control-row {
             display: flex;
             justify-content: space-between;
+            font-size: 0.9rem;
         }
         button {
             background-color: #00ff66;
@@ -74,6 +75,7 @@
             cursor: pointer;
             transition: all 0.2s;
             border-radius: 4px;
+            letter-spacing: 1px;
         }
         button:hover {
             background-color: #00cc52;
@@ -97,11 +99,11 @@
 <body>
 
 <div class="container">
-    <h1>IP-SPIRIT BOX v2.1</h1>
+    <h1>IP-SPIRIT BOX v3.0 // DSP</h1>
     
     <div class="display" id="display">
         <div id="station-name">SYSTEM READY</div>
-        <div id="station-info" style="font-size: 0.8rem; color: #00aa44; margin-top: 8px;">TAP START TO INITIALIZE BANDS</div>
+        <div id="station-info" style="font-size: 0.8rem; color: #00aa44; margin-top: 8px;">PRESS START TO WORK BANDS</div>
     </div>
 
     <div class="controls">
@@ -109,16 +111,37 @@
         
         <div class="control-group">
             <div class="control-row">
-                <label for="sweep-rate">Sweep Rate: <strong><span id="rate-val">300</span>ms</strong></label>
+                <label for="sweep-rate">Sweep Rate: <strong><span id="rate-val">200</span>ms</strong></label>
             </div>
-            <input type="range" id="sweep-rate" min="150" max="1500" step="50" value="300">
+            <input type="range" id="sweep-rate" min="100" max="1000" step="25" value="200">
         </div>
 
         <div class="control-group">
             <div class="control-row">
-                <label for="static-vol">Radio Static Volume: <strong><span id="static-val">25</span>%</strong></label>
+                <label for="formant-shift">Formant Shifter Resonance: <strong><span id="formant-val">Neutral</span></strong></label>
             </div>
-            <input type="range" id="static-vol" min="0" max="100" value="25">
+            <input type="range" id="formant-shift" min="0" max="100" value="50">
+        </div>
+
+        <div class="control-group">
+            <div class="control-row">
+                <label for="bass-cut">Tone: Bass Cut (High-Pass Filter): <strong><span id="bass-val">20</span> Hz</strong></label>
+            </div>
+            <input type="range" id="bass-cut" min="20" max="1200" step="10" value="20">
+        </div>
+
+        <div class="control-group">
+            <div class="control-row">
+                <label for="treble-cut">Tone: Treble Cut (Low-Pass Filter): <strong><span id="treble-val">20.0</span> kHz</strong></label>
+            </div>
+            <input type="range" id="treble-cut" min="1000" max="20000" step="250" value="20000">
+        </div>
+
+        <div class="control-group">
+            <div class="control-row">
+                <label for="static-vol">Radio Static Volume: <strong><span id="static-val">20</span>%</strong></label>
+            </div>
+            <input type="range" id="static-vol" min="0" max="100" value="20">
         </div>
     </div>
 
@@ -131,39 +154,116 @@
     
     let stations = [];
     let audioPool = [];
+    
+    // Core Web Audio API Nodes
     let audioContext = null;
     let staticNode = null;
     let staticGain = null;
+    let hpFilter = null;      // Bass Control
+    let lpFilter = null;      // Treble Control
+    let formantFilterL = null;// Low Formant Peak Resonator
+    let formantFilterH = null;// High Formant Peak Resonator
     
     let isSweeping = false;
     let sweepTimeout = null;
     let activeAudio = null;
 
+    // DOM Wire Elements
     const startBtn = document.getElementById('start-btn');
     const sweepRateInput = document.getElementById('sweep-rate');
     const rateVal = document.getElementById('rate-val');
+    const formantInput = document.getElementById('formant-shift');
+    const formantVal = document.getElementById('formant-val');
+    const bassInput = document.getElementById('bass-cut');
+    const bassVal = document.getElementById('bass-val');
+    const trebleInput = document.getElementById('treble-cut');
+    const trebleVal = document.getElementById('treble-val');
     const staticVolInput = document.getElementById('static-vol');
     const staticVal = document.getElementById('static-val');
     const stationNameDiv = document.getElementById('station-name');
     const stationInfoDiv = document.getElementById('station-info');
     const statusLog = document.getElementById('status-log');
 
+    // UI Sliders Reactive Processing
     sweepRateInput.addEventListener('input', () => rateVal.textContent = sweepRateInput.value);
-    staticVolInput.addEventListener('input', () => {
-        staticVal.textContent = staticVolInput.value;
-        if (staticGain) {
-            staticGain.gain.value = (staticVolInput.value / 100) * 0.12; 
-        }
+    
+    bassInput.addEventListener('input', () => {
+        bassVal.textContent = bassInput.value;
+        if (hpFilter) hpFilter.frequency.setValueAtTime(parseFloat(bassInput.value), audioContext.currentTime);
     });
 
-    function initStaticNoise() {
+    trebleInput.addEventListener('input', () => {
+        trebleVal.textContent = (trebleInput.value / 1000).toFixed(1);
+        if (lpFilter) lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
+    });
+
+    staticVolInput.addEventListener('input', () => {
+        staticVal.textContent = staticVolInput.value;
+        if (staticGain) staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.10, audioContext.currentTime);
+    });
+
+    formantInput.addEventListener('input', () => {
+        const val = parseInt(formantInput.value);
+        if (val < 35) formantVal.textContent = "Deep (Ooo)";
+        else if (val > 65) formantVal.textContent = "Bright (Eee)";
+        else formantVal.textContent = "Neutral";
+        
+        updateFormantFrequencies(val);
+    });
+
+    // Calculates vocal vocalization tract values using dynamic slider parameters
+    function updateFormantFrequencies(sliderValue) {
+        if (!formantFilterL || !formantFilterH) return;
+        const pct = sliderValue / 100;
+        
+        // Maps lower and higher structural harmonic formants linearly
+        const lowF = 350 + (pct * 450);    // Sweeps 350Hz - 800Hz
+        const highF = 900 + (pct * 1900);  // Sweeps 900Hz - 2800Hz
+        
+        formantFilterL.frequency.setValueAtTime(lowF, audioContext.currentTime);
+        formantFilterH.frequency.setValueAtTime(highF, audioContext.currentTime);
+    }
+
+    // Instantiates processing core filters and white noise generator nodes
+    function initAudioEngine() {
         if (audioContext) return;
+        
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         
+        // Tone Node Setup: Highpass (Bass EQ Layer)
+        hpFilter = audioContext.createBiquadFilter();
+        hpFilter.type = "highpass";
+        hpFilter.frequency.setValueAtTime(parseFloat(bassInput.value), audioContext.currentTime);
+
+        // Tone Node Setup: Lowpass (Treble EQ Layer)
+        lpFilter = audioContext.createBiquadFilter();
+        lpFilter.type = "lowpass";
+        lpFilter.frequency.setValueAtTime(parseFloat(trebleInput.value), audioContext.currentTime);
+
+        // Formant Resonators: Dual Peaking Filters with High Q Factors
+        formantFilterL = audioContext.createBiquadFilter();
+        formantFilterL.type = "peaking";
+        formantFilterL.Q.setValueAtTime(7.0, audioContext.currentTime); // High sharpness (resonance)
+        formantFilterL.gain.setValueAtTime(14, audioContext.currentTime); // High Boost 
+
+        formantFilterH = audioContext.createBiquadFilter();
+        formantFilterH.type = "peaking";
+        formantFilterH.Q.setValueAtTime(7.0, audioContext.currentTime);
+        formantFilterH.gain.setValueAtTime(14, audioContext.currentTime);
+
+        updateFormantFrequencies(parseInt(formantInput.value));
+
+        // Processing Pipeline Interconnection:
+        // Source signals -> Bass Cut -> Treble Cut -> Low Formant -> High Formant -> Speakers
+        hpFilter.connect(lpFilter);
+        lpFilter.connect(formantFilterL);
+        formantFilterL.connect(formantFilterH);
+        formantFilterH.connect(audioContext.destination);
+
+        // Synthesize Background Static Matrix
         const bufferSize = 2 * audioContext.sampleRate;
         const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
         const output = noiseBuffer.getChannelData(0);
-        
         for (let i = 0; i < bufferSize; i++) {
             output[i] = Math.random() * 2 - 1;
         }
@@ -173,10 +273,10 @@
         staticNode.loop = true;
 
         staticGain = audioContext.createGain();
-        staticGain.gain.value = (staticVolInput.value / 100) * 0.12;
+        staticGain.gain.setValueAtTime((staticVolInput.value / 100) * 0.10, audioContext.currentTime);
 
         staticNode.connect(staticGain);
-        staticGain.connect(audioContext.destination);
+        staticGain.connect(hpFilter); // Static passes through tone/formant filters organically
         staticNode.start();
     }
 
@@ -189,46 +289,57 @@
             const isHttpsMode = window.location.protocol === 'https:';
             if (isHttpsMode) {
                 stations = rawStations.filter(s => (s.url_resolved || s.url).startsWith('https://'));
-                statusLog.textContent = `Indexed ${stations.length} secure HTTPS streams.`;
+                statusLog.textContent = `Indexed ${stations.length} secure DSP-ready streams.`;
             } else {
                 stations = rawStations;
-                statusLog.textContent = `Indexed ${stations.length} global streams.`;
+                statusLog.textContent = `Indexed ${stations.length} global DSP-ready streams.`;
             }
-
-            if (stations.length === 0) throw new Error("No compatible streams found.");
+            if (stations.length === 0) throw new Error("No streams matching security protocol guidelines.");
         } catch (error) {
             console.error(error);
-            statusLog.textContent = "Directory fetch failed. Retrying configuration...";
+            statusLog.textContent = "Directory fetch failed. Retrying sync engine...";
             setTimeout(fetchStations, 5000);
         }
     }
 
-    function assignRandomStation(audioElement) {
+    function assignRandomStation(audioObj) {
         if (!stations.length) return;
         const randomTarget = stations[Math.floor(Math.random() * stations.length)];
         
-        audioElement.src = randomTarget.url_resolved || randomTarget.url;
-        audioElement.stationData = randomTarget;
-        audioElement.volume = 0;
+        audioObj.element.src = randomTarget.url_resolved || randomTarget.url;
+        audioObj.element.stationData = randomTarget;
+        audioObj.element.volume = 0;
         
-        audioElement.play().catch(() => {});
+        audioObj.element.play().catch(() => {});
     }
 
     function buildAudioPool() {
         if (audioPool.length > 0) return;
 
         for (let i = 0; i < POOL_SIZE; i++) {
-            const audio = new Audio();
-            audio.preload = "auto";
+            const audioEl = new Audio();
+            audioEl.preload = "auto";
             
-            audio.addEventListener('error', () => {
+            // Critical CORS authentication parameter for graph extraction
+            audioEl.crossOrigin = "anonymous"; 
+            
+            const audioObj = {
+                element: audioEl,
+                sourceNode: audioContext.createMediaElementSource(audioEl)
+            };
+
+            // Intercept non-CORS configurations or dead packets, drop instantly, and swap out
+            audioEl.addEventListener('error', () => {
                 if (isSweeping) {
-                    assignRandomStation(audio);
+                    assignRandomStation(audioObj);
                 }
             });
 
-            assignRandomStation(audio);
-            audioPool.push(audio);
+            // Route audio element into the central filter matrix
+            audioObj.sourceNode.connect(hpFilter);
+
+            assignRandomStation(audioObj);
+            audioPool.push(audioObj);
         }
     }
 
@@ -236,24 +347,25 @@
         if (!isSweeping) return;
 
         if (activeAudio) {
-            activeAudio.volume = 0;
-            if (Math.random() < 0.40) {
+            activeAudio.element.volume = 0;
+            if (Math.random() < 0.45) {
                 assignRandomStation(activeAudio);
             }
         }
 
-        const readyChannels = audioPool.filter(a => a.readyState >= 2 && !a.paused && !a.error);
+        // Scan pool for nodes that have buffered valid packets through cross-origin requirements
+        const readyChannels = audioPool.filter(a => a.element.readyState >= 2 && !a.element.paused && !a.element.error);
 
         if (readyChannels.length > 0) {
             activeAudio = readyChannels[Math.floor(Math.random() * readyChannels.length)];
-            activeAudio.volume = 1.0;
+            activeAudio.element.volume = 1.0;
 
-            const cleanName = activeAudio.stationData.name.trim().toUpperCase().substring(0, 24);
-            stationNameDiv.textContent = cleanName || "UNKNOWN BAND";
-            stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.stationData.countrycode || 'GLOBAL'}`;
+            const cleanName = activeAudio.element.stationData.name.trim().toUpperCase().substring(0, 24);
+            stationNameDiv.textContent = cleanName || "UNKNOWN SOURCE";
+            stationInfoDiv.textContent = `CH: ${Math.floor(Math.random() * 800 + 100)} IP // LOC: ${activeAudio.element.stationData.countrycode || 'GLOBAL'}`;
         } else {
             stationNameDiv.textContent = "TUNING DIAL...";
-            stationInfoDiv.textContent = `RE-BUFFERING BANDS (${audioPool.filter(a => a.readyState < 2).length} STALLED)`;
+            stationInfoDiv.textContent = "SEARCHING FOR CORS STATIONS...";
             activeAudio = null;
         }
 
@@ -261,20 +373,18 @@
     }
 
     startBtn.addEventListener('click', async () => {
+        // Enforce safe instantiation inside user-interaction callback window
         if (!audioContext) {
-            initStaticNoise();
+            initAudioEngine();
         }
         
         if (isSweeping) {
-            // STOP ACTION
             isSweeping = false;
             clearTimeout(sweepTimeout);
             
-            // Mute background radio pools
-            audioPool.forEach(a => a.volume = 0);
-            if (activeAudio) activeAudio.volume = 0;
+            audioPool.forEach(a => a.element.volume = 0);
+            if (activeAudio) activeAudio.element.volume = 0;
             
-            // FIX: Suspend the Web Audio engine entirely to kill the generated static noise
             if (audioContext && audioContext.state === 'running') {
                 await audioContext.suspend();
             }
@@ -283,13 +393,11 @@
             stationNameDiv.textContent = "SWEEP HALTED";
             stationInfoDiv.textContent = "SYSTEM STANDBY";
         } else {
-            // START ACTION
             if (stations.length === 0) {
-                statusLog.textContent = "Error: Directory not populated yet.";
+                statusLog.textContent = "Awaiting network handshake initialization...";
                 return;
             }
             
-            // Wake the audio engine back up if it was suspended
             if (audioContext && audioContext.state === 'suspended') {
                 await audioContext.resume();
             }
