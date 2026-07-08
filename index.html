@@ -8,12 +8,12 @@
         body { background-color: #1a1a1a; color: #fff; font-family: 'Courier New', Courier, monospace; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; }
         .device { background: linear-gradient(145deg, #2a2a2a, #1f1f1f); padding: 15px; border-radius: 12px; box-shadow: 5px 5px 15px #111; width: 100%; max-width: 360px; text-align: center; border: 1px solid #333; }
         .lcd-screen { background-color: #0a1a0a; border: 3px solid #000; border-radius: 6px; padding: 10px; margin-bottom: 15px; box-shadow: inset 0 0 10px rgba(0,255,0,0.2); position: relative; overflow: hidden; min-height: 80px; }
-        #waveform-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.6; pointer-events: none; }
+        #waveform-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
         .station-display { color: #4af626; font-size: 1.2em; font-weight: bold; text-shadow: 0 0 5px #4af626; margin: 5px 0; min-height: 20px; position: relative; z-index: 2; }
         .status-text { color: #2e8b18; font-size: 0.75em; position: relative; z-index: 2; }
         .controls { display: flex; flex-direction: column; gap: 6px; }
-        button { background-color: #d32f2f; color: white; border: none; padding: 10px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; text-transform: uppercase; }
-        button.active { background-color: #388e3c; }
+        button { background-color: #388e3c; color: white; border: none; padding: 10px; font-size: 1em; font-weight: bold; border-radius: 6px; cursor: pointer; text-transform: uppercase; }
+        button.active { background-color: #d32f2f; }
         .control-group { display: flex; justify-content: space-between; align-items: center; background: #222; padding: 6px 10px; border-radius: 6px; border: 1px solid #333; font-size: 0.8em; }
         .stepper { display: flex; align-items: center; gap: 8px; }
         .stepper button { padding: 2px 10px; font-size: 1.1em; background: #444; }
@@ -31,7 +31,30 @@
             <div class="status-text" id="rate-display">SWEEP: 200ms</div>
         </div>
         <div class="controls">
-            <button id="power-btn">Power / Start</button>
+            <button id="power-btn">Start Sweep</button>
+            <div class="control-group">
+                <span>Language</span>
+                <select id="lang-select" style="background:#222; color:#4af626; border:1px solid #333; padding:2px; border-radius:4px;">
+                    <option value="english">English</option>
+                    <option value="all">All</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <span>Gate Open %</span>
+                <div class="stepper">
+                    <button onclick="updateStepper('gate', -10)">-</button>
+                    <span id="gate-val">50%</span>
+                    <button onclick="updateStepper('gate', 10)">+</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <span>Pool Size</span>
+                <div class="stepper">
+                    <button onclick="updateStepper('pool', -25)">-</button>
+                    <span id="pool-val">100</span>
+                    <button onclick="updateStepper('pool', 25)">+</button>
+                </div>
+            </div>
             <div class="control-group">
                 <span>Sweep Rate</span>
                 <div class="stepper">
@@ -52,7 +75,7 @@
                 <span>Static Vol</span>
                 <div class="stepper">
                     <button onclick="updateStepper('static', -5)">-</button>
-                    <span id="static-val">5%</span>
+                    <span id="static-val">10%</span>
                     <button onclick="updateStepper('static', 5)">+</button>
                 </div>
             </div>
@@ -73,55 +96,66 @@
                 </div>
             </div>
             <div class="checkbox-group">
-                <label for="effect-isolation">Voice Isolation</label>
-                <input type="checkbox" id="effect-isolation">
+                <label for="static-toggle">Static</label>
+                <input type="checkbox" id="static-toggle" checked>
             </div>
             <div class="checkbox-group">
-                <label for="effect-click">Channel Click</label>
-                <input type="checkbox" id="effect-click" checked>
+                <label for="effect-isolation">Voice Isolation</label>
+                <input type="checkbox" id="effect-isolation">
             </div>
         </div>
     </div>
     <script>
-        let audioElements = [], isSweeping = false, isLoading = false, audioCtx, bassFilter, trebleFilter, bandpassNode, analyser, masterGainNode, staticGainNode, staticSource, reverbNode, wetGainNode;
-        let vals = { sweep: 200, static: 5, bass: 0, treble: 0, reverb: 0 };
+        let audioNodes = [], isSweeping = false, audioCtx, bassFilter, trebleFilter, bandpassNode, analyser, masterGainNode, staticGainNode, staticSource, reverbNode, wetGainNode, gateNode;
+        let vals = { sweep: 200, static: 10, gate: 50, pool: 100, bass: 0, treble: 0, reverb: 0 };
         let lastSweepTime = 0;
-        const powerBtn = document.getElementById('power-btn'), stationDisplay = document.getElementById('station'), statusDisplay = document.getElementById('status'), rateDisplay = document.getElementById('rate-display'), isolationToggle = document.getElementById('effect-isolation'), clickToggle = document.getElementById('effect-click'), canvas = document.getElementById('waveform-canvas'), canvasCtx = canvas.getContext('2d');
+        const powerBtn = document.getElementById('power-btn'), stationDisplay = document.getElementById('station'), statusDisplay = document.getElementById('status'), rateDisplay = document.getElementById('rate-display'), isolationToggle = document.getElementById('effect-isolation'), langSelect = document.getElementById('lang-select'), staticToggle = document.getElementById('static-toggle'), canvas = document.getElementById('waveform-canvas'), canvasCtx = canvas.getContext('2d');
 
         function updateStepper(key, delta) {
             if(key === 'sweep') vals.sweep = Math.max(50, Math.min(2500, vals.sweep + delta));
-            if(key === 'static') vals.static = Math.max(0, Math.min(100, vals.static + delta));
-            if(key === 'bass') vals.bass = Math.max(-20, Math.min(20, vals.bass + delta));
-            if(key === 'treble') vals.treble = Math.max(-20, Math.min(20, vals.treble + delta));
-            if(key === 'reverb') vals.reverb = Math.max(0, Math.min(100, vals.reverb + delta));
+            else if(key === 'gate') vals.gate = Math.max(10, Math.min(100, vals.gate + delta));
+            else if(key === 'pool') vals.pool = Math.max(25, Math.min(200, vals.pool + delta));
+            else if(key === 'static') vals.static = Math.max(0, Math.min(100, vals.static + delta));
+            else if(key === 'bass') vals.bass = Math.max(-20, Math.min(20, vals.bass + delta));
+            else if(key === 'treble') vals.treble = Math.max(-20, Math.min(20, vals.treble + delta));
+            else if(key === 'reverb') vals.reverb = Math.max(0, Math.min(100, vals.reverb + delta));
             
-            document.getElementById(key + '-val').innerText = vals[key] + (key === 'sweep' ? 'ms' : (key === 'reverb' || key === 'static' ? '%' : 'dB'));
+            let unit = 'dB';
+            if (key === 'sweep') unit = 'ms';
+            else if (key === 'gate' || key === 'reverb' || key === 'static') unit = '%';
+            else if (key === 'pool') unit = '';
+            
+            document.getElementById(key + '-val').innerText = vals[key] + unit;
             if(key === 'sweep') rateDisplay.innerText = `SWEEP: ${vals.sweep}ms`;
             
             if(audioCtx) {
                 if(key === 'bass' && bassFilter) bassFilter.gain.value = vals.bass;
                 if(key === 'treble' && trebleFilter) trebleFilter.gain.value = vals.treble;
-                if(key === 'static' && staticGainNode) staticGainNode.gain.value = vals.static / 100;
+                if(key === 'static' && staticGainNode) staticGainNode.gain.value = staticToggle.checked ? vals.static / 100 : 0;
                 if(key === 'reverb' && wetGainNode) wetGainNode.gain.value = vals.reverb / 100;
             }
         }
 
-        function triggerChannelClick() {
-            if(!audioCtx || !clickToggle.checked) return;
-            const bufferSize = audioCtx.sampleRate * 0.05;
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for(let i=0; i<bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
-            const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
-            const filter = audioCtx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 3000;
-            const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-            noise.connect(filter); filter.connect(gain); gain.connect(masterGainNode); noise.start();
+        staticToggle.onchange = () => {
+            if(staticGainNode) staticGainNode.gain.value = staticToggle.checked ? vals.static / 100 : 0;
+        };
+
+        function triggerHardGate() {
+            if(!audioCtx || !gateNode) return;
+            const now = audioCtx.currentTime;
+            const gateDuration = (vals.gate / 100) * (vals.sweep / 1000);
+            gateNode.gain.cancelScheduledValues(now);
+            gateNode.gain.setValueAtTime(0, now);
+            gateNode.gain.setValueAtTime(1, now + 0.01); 
+            gateNode.gain.setValueAtTime(0, now + gateDuration);
         }
 
         function initWebAudioEngine() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 masterGainNode = audioCtx.createGain(); masterGainNode.gain.value = 1.5;
+                gateNode = audioCtx.createGain(); gateNode.gain.value = 1;
+                
                 bassFilter = audioCtx.createBiquadFilter(); bassFilter.type = 'lowshelf'; bassFilter.frequency.value = 250; bassFilter.gain.value = vals.bass;
                 trebleFilter = audioCtx.createBiquadFilter(); trebleFilter.type = 'highshelf'; trebleFilter.frequency.value = 4000; trebleFilter.gain.value = vals.treble;
                 bandpassNode = audioCtx.createBiquadFilter(); bandpassNode.type = 'allpass'; bandpassNode.frequency.value = 1200;
@@ -133,17 +167,25 @@
                 }
                 reverbNode.buffer = impulse;
                 wetGainNode = audioCtx.createGain(); wetGainNode.gain.value = vals.reverb / 100;
-                analyser = audioCtx.createAnalyser();
-                bassFilter.connect(trebleFilter); trebleFilter.connect(bandpassNode); 
-                bandpassNode.connect(analyser); bandpassNode.connect(reverbNode); reverbNode.connect(wetGainNode);
-                analyser.connect(masterGainNode); wetGainNode.connect(masterGainNode);
+                
+                analyser = audioCtx.createAnalyser(); analyser.fftSize = 64;
+
+                bassFilter.connect(trebleFilter);
+                trebleFilter.connect(bandpassNode);
+                bandpassNode.connect(analyser);
+                bandpassNode.connect(reverbNode);
+                reverbNode.connect(wetGainNode);
+                
+                bandpassNode.connect(gateNode);
+                wetGainNode.connect(gateNode);
+                gateNode.connect(masterGainNode);
                 masterGainNode.connect(audioCtx.destination);
-                staticGainNode = audioCtx.createGain(); staticGainNode.gain.value = vals.static / 100; staticGainNode.connect(bassFilter);
                 
-                // Create static buffer
-                const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0); for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
+                staticGainNode = audioCtx.createGain(); staticGainNode.gain.value = staticToggle.checked ? vals.static / 100 : 0; staticGainNode.connect(bassFilter);
                 
-                // Start static
+                const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+                const output = noiseBuffer.getChannelData(0); 
+                for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
                 staticSource = audioCtx.createBufferSource(); staticSource.buffer = noiseBuffer; staticSource.loop = true; staticSource.connect(staticGainNode); staticSource.start();
                 runLoop();
             }
@@ -153,57 +195,59 @@
         function runLoop() {
             requestAnimationFrame(runLoop);
             if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
+            
+            // Clear if not sweeping
+            if (!isSweeping) {
+                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
             if (analyser) {
                 const dataArray = new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(dataArray);
                 
-                let sum = 0;
-                for(let i = 0; i < dataArray.length; i++) {
-                    const val = (dataArray[i] - 128) / 128;
-                    sum += val * val;
-                }
-                let rms = Math.sqrt(sum / dataArray.length);
+                canvasCtx.clearRect(0, 0, canvas.width, canvas.height); 
+                canvasCtx.beginPath();
+                canvasCtx.strokeStyle = '#39FF14';
+                canvasCtx.lineWidth = 2;
                 
-                canvasCtx.clearRect(0, 0, canvas.width, canvas.height); canvasCtx.beginPath();
-                canvasCtx.strokeStyle = (rms > 0.05) ? '#ffa500' : '#4af626';
-                for (let i = 0; i < dataArray.length; i++) canvasCtx.lineTo(i * (canvas.width/dataArray.length), (dataArray[i]/128.0) * canvas.height/2);
+                const centerY = canvas.height / 2;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const x = i * (canvas.width / (dataArray.length - 1));
+                    const y = centerY + ((dataArray[i] - 128) / 128) * (canvas.height / 2);
+                    if(i === 0) canvasCtx.moveTo(x, y);
+                    else canvasCtx.lineTo(x, y);
+                }
                 canvasCtx.stroke();
             }
             if (isSweeping && performance.now() - lastSweepTime > vals.sweep) { switchStation(); lastSweepTime = performance.now(); }
         }
 
         function switchStation() {
-            if (audioElements.length === 0) return;
-            audioElements.forEach(a => a.volume = 0);
-            const randomIndex = Math.floor(Math.random() * audioElements.length);
-            const sel = audioElements[randomIndex];
-            sel.volume = 1;
-            triggerChannelClick();
+            if (audioNodes.length === 0) return;
+            audioNodes.forEach(node => { try { node.disconnect(bassFilter); } catch(e) {} });
+            const randomIndex = Math.floor(Math.random() * audioNodes.length);
+            audioNodes[randomIndex].connect(bassFilter);
             stationDisplay.innerText = `CH ${randomIndex + 1}`;
+            triggerHardGate();
         }
 
         powerBtn.addEventListener('click', async () => {
             if (!isSweeping) {
                 initWebAudioEngine();
-                const response = await fetch('https://de1.api.radio-browser.info/json/stations/search?limit=100&order=random&hidebroken=true&language=english');
+                const langParam = langSelect.value === 'english' ? '&language=english' : '';
+                const response = await fetch(`https://de1.api.radio-browser.info/json/stations/search?limit=${vals.pool}&order=random&hidebroken=true${langParam}`);
                 const stations = await response.json();
                 stations.forEach(s => {
-                    const a = new Audio(s.url_resolved); a.crossOrigin = "anonymous"; a.volume = 0; a.loop = true;
-                    try { audioCtx.createMediaElementSource(a).connect(bassFilter); } catch (e) {}
-                    a.play().catch(()=>{}); audioElements.push(a);
+                    const a = new Audio(s.url_resolved); a.crossOrigin = "anonymous"; a.loop = true;
+                    a.play().catch(()=>{});
+                    const source = audioCtx.createMediaElementSource(a);
+                    audioNodes.push(source);
                 });
-                // Ensure static starts playing
-                if (!staticSource) {
-                    const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
-                    const output = noiseBuffer.getChannelData(0); 
-                    for (let i = 0; i < noiseBuffer.length; i++) output[i] = Math.random() * 2 - 1;
-                    staticSource = audioCtx.createBufferSource(); staticSource.buffer = noiseBuffer; staticSource.loop = true; staticSource.connect(staticGainNode); staticSource.start();
-                }
                 isSweeping = true; powerBtn.classList.add('active'); powerBtn.innerText = "Stop Sweep"; statusDisplay.innerText = "STATUS: SWEEPING";
             } else {
-                isSweeping = false; powerBtn.classList.remove('active'); powerBtn.innerText = "Power / Start"; statusDisplay.innerText = "STATUS: STANDBY";
-                audioElements.forEach(a => { a.pause(); a.src = ""; }); 
-                audioElements = [];
-                if(staticSource) { staticSource.stop(); staticSource = null; }
+                isSweeping = false; powerBtn.classList.remove('active'); powerBtn.innerText = "Start Sweep"; statusDisplay.innerText = "STATUS: STANDBY";
+                audioNodes.forEach(n => { try { n.disconnect(); } catch(e){} });
+                audioNodes = [];
             }
         });
         isolationToggle.onchange = (e) => { if(bandpassNode) bandpassNode.type = e.target.checked ? 'bandpass' : 'allpass'; };
